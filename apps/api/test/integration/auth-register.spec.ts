@@ -53,8 +53,26 @@ describe('POST /api/v1/auth/register (first-run setup)', () => {
     expect(fields).toEqual(expect.arrayContaining(['email', 'password']));
   });
 
+  it('uses the provided timezone for the new organization', async () => {
+    const res = await register({ ...owner, timezone: 'Asia/Dhaka' }).expect(201);
+    expect(res.body.user.timezone).toBe('Asia/Dhaka');
+  });
+
+  it('rejects an unknown timezone', async () => {
+    const res = await register({ ...owner, timezone: 'Mars/Olympus' }).expect(422);
+    expect(res.body.error.details[0].path).toBe('timezone');
+  });
+
   it('rejects passwords longer than 128 characters', async () => {
     await register({ ...owner, password: 'x'.repeat(129) }).expect(422);
+  });
+
+  it('reports whether first-run setup is still available', async () => {
+    const before = await request(t.app.getHttpServer()).get('/api/v1/auth/setup-status').expect(200);
+    expect(before.body).toEqual({ setupRequired: true, signupOpen: true });
+    await register(owner).expect(201);
+    const after = await request(t.app.getHttpServer()).get('/api/v1/auth/setup-status').expect(200);
+    expect(after.body).toEqual({ setupRequired: false, signupOpen: false });
   });
 
   it('records the registration in the audit log', async () => {

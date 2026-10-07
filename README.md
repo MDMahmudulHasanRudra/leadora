@@ -20,13 +20,12 @@ cp .env.example .env        # then set POSTGRES_PASSWORD and JWT_SECRET
 docker compose up -d --build --wait
 ```
 
-Open http://localhost:8080 (port set by `PUBLIC_HTTP_PORT`).
+Open http://localhost:8080 (port set by `PUBLIC_HTTP_PORT`). On first run you are sent to **/setup** to create your organization and the first admin account. After that, registration closes (unless `ALLOW_SIGNUP=true`) and admins add people under **Users**.
 
-Migrations run automatically through the one-shot `migrate` service before `api` and `worker` start. To run them manually or seed demo data:
+Migrations run automatically through the one-shot `migrate` service before `api` and `worker` start. To run them manually:
 
 ```bash
 docker compose run --rm migrate
-docker compose run --rm migrate node node_modules/@leadora/database/dist/seed.js
 ```
 
 Useful commands:

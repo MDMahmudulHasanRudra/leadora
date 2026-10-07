@@ -49,6 +49,11 @@ export class AuthService {
     private readonly limiter: LoginRateLimiter,
   ) {}
 
+  async setupStatus() {
+    const [{ n } = { n: 0 }] = await this.handle.db.select({ n: count() }).from(organizations);
+    return { setupRequired: n === 0, signupOpen: n === 0 || this.env.ALLOW_SIGNUP };
+  }
+
   async login(input: LoginInput, meta: RequestMeta) {
     await this.limiter.assertAllowed(meta.ip, input.email);
 
@@ -98,7 +103,11 @@ export class AuthService {
 
         const [org] = await tx
           .insert(organizations)
-          .values({ name: input.organizationName, slug: await this.uniqueSlug(tx, input.organizationName) })
+          .values({
+            name: input.organizationName,
+            slug: await this.uniqueSlug(tx, input.organizationName),
+            timezone: input.timezone ?? 'UTC',
+          })
           .returning();
         const roleIds = await seedDefaultRoles(tx, org!.id);
         const [user] = await tx
@@ -136,7 +145,14 @@ export class AuthService {
         const token = await this.sessions.create(tx, user!.id, org!.id, meta);
         return {
           token,
-          user: { id: user!.id, email: user!.email, fullName: user!.fullName, status: user!.status, role: 'ADMIN' as const },
+          user: {
+            id: user!.id,
+            email: user!.email,
+            fullName: user!.fullName,
+            status: user!.status,
+            role: 'ADMIN' as const,
+            timezone: org!.timezone,
+          },
           organization: { id: org!.id, name: org!.name, slug: org!.slug },
         };
       });

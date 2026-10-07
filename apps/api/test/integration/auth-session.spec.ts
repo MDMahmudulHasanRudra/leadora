@@ -25,6 +25,17 @@ describe('sessions: login, me, logout', () => {
     expect(me.body.permissions).toEqual(expect.arrayContaining(['user.create', 'lead.assign']));
   });
 
+  it('exposes the effective timezone: the user override, else the organization default', async () => {
+    const { agent } = await login(t, ADMIN.email, ADMIN.password);
+    expect((await agent.get('/api/v1/auth/me').expect(200)).body.user.timezone).toBe('UTC');
+
+    await t.db.execute(sql`update organizations set timezone = 'Asia/Dhaka'`);
+    expect((await agent.get('/api/v1/auth/me').expect(200)).body.user.timezone).toBe('Asia/Dhaka');
+
+    await t.db.execute(sql`update users set timezone = 'Europe/London'`);
+    expect((await agent.get('/api/v1/auth/me').expect(200)).body.user.timezone).toBe('Europe/London');
+  });
+
   it('gives the same answer for an unknown email and a wrong password', async () => {
     const wrong = (await login(t, ADMIN.email, 'not the password!!')).res;
     const unknown = (await login(t, 'nobody@acme.test', 'not the password!!')).res;

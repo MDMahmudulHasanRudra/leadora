@@ -7,7 +7,7 @@ Follows spec §103–§114 and the sprint backlog in §148. Each phase is done o
 | Phase | Scope | Status |
 | --- | --- | --- |
 | 0 | Foundation: monorepo, Docker, CI, config, Postgres, Valkey, migrations, logging, health, basic web/API | **Done** (verified locally 2026-10-08; CI not yet run on GitHub) |
-| 1 | CRM MVP: auth, organizations, users, teams, RBAC, leads, contacts, companies, pipeline, assignment, follow-ups, tasks, notes, activities, dashboard | Not started |
+| 1 | CRM MVP: auth, organizations, users, teams, RBAC, leads, contacts, companies, pipeline, assignment, follow-ups, tasks, notes, activities, dashboard | **Sprint 2 done** (auth, tenancy, RBAC, users, teams, audit, web). Sprint 3 (leads) next |
 | 2 | Communication: inbox, conversations, messages, realtime, email adapter, webhooks | Not started |
 | 3 | AI foundation: provider abstraction, OpenAI Responses API, settings, usage logging, prompt versioning, structured outputs | Not started |
 | 4 | AI intelligence: scoring, conversation analysis, summaries, reply assistant, next action, NL search | Not started |
@@ -52,6 +52,13 @@ Trust boundaries: HTTP body/cookies/headers (incl. `Origin`, `X-Forwarded-For` f
 | Elevation | Disabled user keeps access | Disabling revokes all sessions; login refused | disabled → 401 |
 
 Deferred to Phase 2 (needs the email adapter): email verification, password reset, invitations.
+
+**Status (2026-10-08):** slices 1–9 are done and committed. There are 50 API integration tests against real Postgres and Valkey, covering every row of the threat model above, plus a mutation check proving the cross-tenant test catches a missing organization filter. The UI was verified in a browser: setup, validation errors, user and team management, audit log, agent permissions, sign-out redirect, mobile width, and a clean console.
+
+Follow-ups noted, not done:
+- Mobile navigation is a horizontal scroller; a collapsible menu would be better once the lead pages exist.
+- Audit entries show raw user ids for membership changes; resolve them to names.
+- Users can't yet change their own password or timezone (needs a profile page).
 
 ### Slices (each: failing test → code → green suite → commit)
 

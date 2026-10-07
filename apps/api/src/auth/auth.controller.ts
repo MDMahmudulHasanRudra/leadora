@@ -19,6 +19,12 @@ export class AuthController {
   ) {}
 
   @Public()
+  @Get('setup-status')
+  setupStatus() {
+    return this.auth.setupStatus();
+  }
+
+  @Public()
   @Post('register')
   @HttpCode(201)
   async register(

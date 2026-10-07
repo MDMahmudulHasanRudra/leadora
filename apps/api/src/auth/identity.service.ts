@@ -5,7 +5,7 @@ import { DB } from '../infra/tokens';
 import type { Permission } from './permissions';
 
 export interface Identity {
-  user: { id: string; email: string; fullName: string; status: string; role: string };
+  user: { id: string; email: string; fullName: string; status: string; role: string; timezone: string };
   organization: { id: string; name: string; slug: string };
   permissions: Permission[];
 }
@@ -22,6 +22,8 @@ export class IdentityService {
         email: users.email,
         fullName: users.fullName,
         status: users.status,
+        timezone: users.timezone,
+        orgTimezone: organizations.timezone,
         role: roles.key,
         permission: rolePermissions.permission,
         orgId: organizations.id,
@@ -38,7 +40,14 @@ export class IdentityService {
     const first = rows[0];
     if (!first) return null;
     return {
-      user: { id: first.id, email: first.email, fullName: first.fullName, status: first.status, role: first.role ?? 'NONE' },
+      user: {
+        id: first.id,
+        email: first.email,
+        fullName: first.fullName,
+        status: first.status,
+        role: first.role ?? 'NONE',
+        timezone: first.timezone ?? first.orgTimezone,
+      },
       organization: { id: first.orgId, name: first.orgName, slug: first.orgSlug },
       permissions: [...new Set(rows.map((r) => r.permission).filter((p): p is string => !!p))] as Permission[],
     };

@@ -6,6 +6,10 @@ x-app-env: &app-env
   DATABASE_URL: postgres://${POSTGRES_USER:-leadora}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-leadora}
   VALKEY_URL: redis://valkey:6379
   JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+  APP_ORIGINS: ${APP_ORIGINS:-http://localhost:8080}
+  ALLOW_SIGNUP: ${ALLOW_SIGNUP:-false}
+  COOKIE_SECURE: ${COOKIE_SECURE:-true}
+  SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-168}
   OPENAI_API_KEY: ${OPENAI_API_KEY:-}
   STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
   ENABLE_AI: ${ENABLE_AI:-false}
