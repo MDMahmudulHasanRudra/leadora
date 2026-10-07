@@ -1,0 +1,16 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Required for lockfile-based `pnpm deploy` (reproducible Docker images).
+injectWorkspacePackages: true
+syncInjectedDepsAfterScripts:
+  - build
+
+allowBuilds:
+  '@parcel/watcher': true
+  '@scarf/scarf': false
+  '@swc/core': true
+  esbuild: true
+  msgpackr-extract: false
+  unrs-resolver: true

@@ -1,0 +1,29 @@
+{
+	admin off
+}
+
+# SITE_ADDRESS defaults to ":80" (plain HTTP). Set it to your domain in production
+# and publish 443 so Caddy can obtain TLS certificates automatically.
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+
+	handle /api/* {
+		reverse_proxy api:3001
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}
+
+# Internal container healthcheck only; port 8081 is never published.
+http://:8081 {
+	respond /healthz "ok" 200
+}

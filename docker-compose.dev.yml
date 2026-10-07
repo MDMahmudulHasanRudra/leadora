@@ -1,0 +1,9 @@
+# Exposes Postgres and Valkey on localhost so apps can run on the host with `pnpm dev`.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres valkey
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"
+  valkey:
+    ports:
+      - "127.0.0.1:6379:6379"

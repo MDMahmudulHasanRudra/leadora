@@ -1,0 +1,16 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: ui-sans-serif, system-ui, 'Segoe UI', Roboto, 'Noto Sans Bengali', sans-serif;
+  --color-brand-50: oklch(0.97 0.02 265);
+  --color-brand-500: oklch(0.56 0.19 265);
+  --color-brand-600: oklch(0.5 0.2 265);
+}
+
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  @apply bg-zinc-50 text-zinc-900 antialiased dark:bg-zinc-950 dark:text-zinc-100;
+}

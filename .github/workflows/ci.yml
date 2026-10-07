@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: leadora
+          POSTGRES_PASSWORD: leadora
+          POSTGRES_DB: leadora
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U leadora" --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgres://leadora:leadora@localhost:5432/leadora
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm lint
+      - name: Build packages
+        run: pnpm build:packages
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Unit & integration tests
+        run: pnpm test
+      - name: Migration check (empty database)
+        run: pnpm db:migrate && pnpm db:migrate
+      - name: Schema drift check
+        run: |
+          pnpm db:generate
+          git diff --exit-code -- packages/database/migrations || (echo "Schema changed without a committed migration" && exit 1)
+      - name: Build
+        run: pnpm build
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: verify
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Smoke test full stack
+        run: |
+          cp .env.example .env
+          docker compose up -d --build --wait
+          curl -fsS http://localhost:8080/ > /dev/null
+          docker compose exec -T api wget -qO- http://127.0.0.1:3001/health/ready
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
