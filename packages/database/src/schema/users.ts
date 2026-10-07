@@ -1,4 +1,4 @@
-import { pgEnum, pgTable, text, timestamp, unique, uuid, varchar } from 'drizzle-orm/pg-core';
+import { index, pgEnum, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
 import { citext, id, timestamps } from './columns';
 import { organizations } from './organizations';
 
@@ -11,7 +11,8 @@ export const users = pgTable(
     organizationId: uuid()
       .notNull()
       .references(() => organizations.id, { onDelete: 'restrict' }),
-    email: citext().notNull(),
+    // Globally unique so login needs no organization picker (ADR-012).
+    email: citext().notNull().unique(),
     fullName: text().notNull(),
     passwordHash: text(),
     status: userStatus().notNull().default('INVITED'),
@@ -21,8 +22,7 @@ export const users = pgTable(
     lastLoginAt: timestamp({ withTimezone: true }),
     ...timestamps,
   },
-  // Leading organization_id column also serves tenant-scoped lookups.
-  (t) => [unique('users_organization_id_email_unique').on(t.organizationId, t.email)],
+  (t) => [index('users_organization_id_idx').on(t.organizationId)],
 );
 
 export type User = typeof users.$inferSelect;

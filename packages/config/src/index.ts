@@ -16,6 +16,19 @@ export const envSchema = z.object({
   VALKEY_URL: z.string().url(),
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
 
+  // Comma-separated origins allowed to make state-changing requests (CSRF defense).
+  APP_ORIGINS: z
+    .string()
+    .default('http://localhost:8080,http://localhost:3000')
+    .transform((v) => v.split(',').map((o) => o.trim()).filter(Boolean)),
+  // Open self-service org registration (SaaS). When false, only first-run setup may register.
+  ALLOW_SIGNUP: flag,
+  COOKIE_SECURE: z
+    .enum(['true', 'false', '1', '0'])
+    .default('true')
+    .transform((v) => v === 'true' || v === '1'),
+  SESSION_TTL_HOURS: z.coerce.number().int().positive().max(24 * 90).default(24 * 7),
+
   OPENAI_API_KEY: z.string().optional().default(''),
 
   STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),

@@ -15,3 +15,4 @@ Format: Context → Decision → Consequences. Status is `Accepted` unless noted
 | [009](ADR-009-open-source-reuse.md) | Open-source reuse policy |
 | [010](ADR-010-drizzle-orm.md) | Drizzle ORM + SQL migrations |
 | [011](ADR-011-toolchain.md) | Toolchain versions & test runners |
+| [012](ADR-012-sessions-and-identity.md) | Opaque sessions, platform-unique email, code-defined permissions |

@@ -1,7 +1,9 @@
 import { type INestApplication, RequestMethod } from '@nestjs/common';
+import cookieParser from 'cookie-parser';
 import { HttpExceptionFilter } from './common/http-exception.filter';
 
 export function configureApp(app: INestApplication): void {
+  app.use(cookieParser());
   app.useGlobalFilters(new HttpExceptionFilter());
   app.setGlobalPrefix('api/v1', {
     exclude: [
