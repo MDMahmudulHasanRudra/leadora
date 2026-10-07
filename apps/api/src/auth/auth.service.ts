@@ -1,15 +1,27 @@
-import { ConflictException, ForbiddenException, Inject, Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import type { Env } from '@leadora/config';
 import { type DbHandle, organizations, type Transaction, userRoles, users } from '@leadora/database';
-import { count, like, sql } from 'drizzle-orm';
+import { count, eq, like, sql } from 'drizzle-orm';
 import { AuditService } from '../audit/audit.service';
 import { isUniqueViolation } from '../common/db-errors';
 import type { RequestMeta } from '../common/request-meta';
 import { DB, ENV } from '../infra/tokens';
-import type { RegisterInput } from './auth.schemas';
-import { hashPassword } from './password';
+import type { LoginInput, RegisterInput } from './auth.schemas';
+import { IdentityService } from './identity.service';
+import { LoginRateLimiter } from './login-rate-limiter';
+import { burnPasswordCheck, hashPassword, verifyPassword } from './password';
 import { seedDefaultRoles } from './roles';
 import { SessionsService } from './sessions.service';
+
+const invalidCredentials = () =>
+  new UnauthorizedException({ code: 'INVALID_CREDENTIALS', message: 'Email or password is incorrect' });
 
 // Arbitrary constant serializing first-run registration across API instances.
 const REGISTRATION_LOCK = 4_242_001;
@@ -26,12 +38,51 @@ export function slugify(name: string): string {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     @Inject(DB) private readonly handle: DbHandle,
     @Inject(ENV) private readonly env: Env,
     private readonly sessions: SessionsService,
     private readonly audit: AuditService,
+    private readonly identity: IdentityService,
+    private readonly limiter: LoginRateLimiter,
   ) {}
+
+  async login(input: LoginInput, meta: RequestMeta) {
+    await this.limiter.assertAllowed(meta.ip, input.email);
+
+    const [user] = await this.handle.db.select().from(users).where(eq(users.email, input.email)).limit(1);
+    const valid = user?.passwordHash
+      ? await verifyPassword(user.passwordHash, input.password)
+      : (await burnPasswordCheck(input.password), false);
+
+    if (!user || !valid) {
+      await this.limiter.recordFailure(meta.ip, input.email);
+      this.logger.warn({ ip: meta.ip }, 'auth.login_failed');
+      throw invalidCredentials();
+    }
+    if (user.status !== 'ACTIVE') {
+      throw new ForbiddenException({ code: 'ACCOUNT_DISABLED', message: 'This account is disabled' });
+    }
+
+    await this.limiter.reset(meta.ip, input.email);
+    const token = await this.handle.db.transaction(async (tx) => {
+      await tx.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
+      await this.audit.record(tx, {
+        organizationId: user.organizationId,
+        actorUserId: user.id,
+        action: 'auth.login',
+        resourceType: 'user',
+        resourceId: user.id,
+        meta,
+      });
+      return this.sessions.create(tx, user.id, user.organizationId, meta);
+    });
+
+    const identity = await this.identity.load(user.id, user.organizationId);
+    return { token, ...identity! };
+  }
 
   async register(input: RegisterInput, meta: RequestMeta) {
     const passwordHash = await hashPassword(input.password);
