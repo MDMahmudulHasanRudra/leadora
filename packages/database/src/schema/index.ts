@@ -3,3 +3,4 @@ export * from './users';
 export * from './access';
 export * from './sessions';
 export * from './audit';
+export * from './teams';
