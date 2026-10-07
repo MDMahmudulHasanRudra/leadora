@@ -33,7 +33,39 @@ Follows spec §103–§114 and the sprint backlog in §148. Each phase is done o
 - [ ] CI green on GitHub (no remote configured yet)
 - [ ] `THIRD_PARTY_NOTICES.md` generated from `pnpm licenses list --prod` (Phase 0 follow-up)
 
-## Phase 1 — next steps (Sprint 2–4)
+## Phase 1 / Sprint 2 — Auth, tenancy, RBAC
+
+### Threat model (STRIDE over the auth boundary)
+
+Trust boundaries: HTTP body/cookies/headers (incl. `Origin`, `X-Forwarded-For` from Caddy), the first-run registration endpoint.
+
+| Threat | Abuse case | Mitigation | Test |
+| --- | --- | --- | --- |
+| Spoofing | Credential stuffing / brute force | Argon2id; Valkey-backed limiter: 10 failed attempts / 15 min per IP+email | 11th attempt → 429 |
+| Spoofing | User enumeration via login | Same `INVALID_CREDENTIALS` for unknown email and wrong password; dummy hash verify | unknown vs wrong pw identical |
+| Spoofing | Stolen session token | 32-byte random token, only SHA-256 stored; `httpOnly`, `SameSite=Lax`, `Secure` (configurable); 7-day expiry; logout revokes | logout → `/me` 401 |
+| Tampering | CSRF on state-changing routes | `SameSite=Lax` + `Origin` allowlist (`APP_ORIGINS`) on non-GET | bad Origin → 403 |
+| Repudiation | Denying an admin action | `audit_logs` row written in the same transaction | audit entries exist |
+| Info disclosure | Password hash or other tenant data in responses | Response DTO allowlists; org id only from session | cross-org → 404 |
+| DoS | Huge passwords to burn CPU | Password 12–128 chars, body limit 100 kB | 129 chars → 422 |
+| Elevation | Agent creates admins / open org registration | Permission guard on every route (deny by default); registration only on first run or `ALLOW_SIGNUP=true` (advisory lock) | agent → 403; 2nd register → 403 |
+| Elevation | Disabled user keeps access | Disabling revokes all sessions; login refused | disabled → 401 |
+
+Deferred to Phase 2 (needs the email adapter): email verification, password reset, invitations.
+
+### Slices (each: failing test → code → green suite → commit)
+
+1. Integration test harness (real Postgres `leadora_test` + Valkey db 15)
+2. Schema: `roles`, `role_permissions`, `user_roles`, `sessions`, `audit_logs`; global unique email (ADR-012)
+3. First-run registration → org + default roles + admin + session
+4. Login / logout / me, with rate limiting and Origin check
+5. Auth guard (deny by default) + `@RequirePermission` + tenant context
+6. Users admin API: list, create, update role/status (disable revokes sessions)
+7. Teams API: CRUD + members
+8. Audit log API
+9. Web: login, first-run setup, authenticated shell, users & teams pages
+
+## Phase 1 — later sprints (3–4)
 
 1. **Schema**: `teams`, `team_members`, `roles`, `permissions`, `role_permissions`, `user_roles`, `sessions`, `audit_logs`, `outbox_events`.
 2. **Auth**: email/password with Argon2id, HTTP-only session cookie, email verification and password reset tokens (hashed), rate limits on auth endpoints.

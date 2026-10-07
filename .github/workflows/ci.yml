@@ -23,8 +23,16 @@ jobs:
         ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U leadora" --health-interval 5s --health-timeout 3s --health-retries 20
+      valkey:
+        image: valkey/valkey:8-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "valkey-cli ping" --health-interval 5s --health-timeout 3s --health-retries 20
     env:
       DATABASE_URL: postgres://leadora:leadora@localhost:5432/leadora
+      TEST_ADMIN_DATABASE_URL: postgres://leadora:leadora@localhost:5432/postgres
+      TEST_DATABASE_URL: postgres://leadora:leadora@localhost:5432/leadora_test
+      TEST_VALKEY_URL: redis://localhost:6379/15
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@v4
