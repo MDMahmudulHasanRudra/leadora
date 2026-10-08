@@ -71,6 +71,13 @@
       "when": 1791439684018,
       "tag": "0009_followups",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791439792886,
+      "tag": "0010_tasks",
+      "breakpoints": true
     }
   ]
 }
