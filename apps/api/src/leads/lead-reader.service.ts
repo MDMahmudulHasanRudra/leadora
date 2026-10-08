@@ -45,6 +45,8 @@ export class LeadReader {
         pipelineId: leads.pipelineId,
         lastContactedAt: leads.lastContactedAt,
         nextFollowupAt: leads.nextFollowupAt,
+        convertedAt: leads.convertedAt,
+        lostAt: leads.lostAt,
         archivedAt: leads.archivedAt,
         createdAt: leads.createdAt,
         updatedAt: leads.updatedAt,
@@ -99,6 +101,8 @@ export class LeadReader {
       tags: tagRows.filter((t) => t.leadId === r.id).map((t) => t.name),
       lastContactedAt: r.lastContactedAt,
       nextFollowupAt: r.nextFollowupAt,
+      convertedAt: r.convertedAt,
+      lostAt: r.lostAt,
       archivedAt: r.archivedAt,
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
@@ -125,7 +129,7 @@ export class LeadReader {
       .from(activities)
       .leftJoin(users, eq(users.id, activities.actorUserId))
       .where(and(eq(activities.organizationId, organizationId), eq(activities.leadId, leadId)))
-      .orderBy(desc(activities.createdAt), desc(activities.id))
+      .orderBy(desc(activities.seq))
       .limit(200);
     return rows.map(({ actorId, actorName, ...a }) => ({ ...a, actor: actorId ? { id: actorId, fullName: actorName } : null }));
   }

@@ -1,13 +1,15 @@
 import { ConflictException, ForbiddenException, Inject, Injectable } from '@nestjs/common';
-import { type DbHandle, leads, leadTagLinks, leadTags } from '@leadora/database';
-import { and, eq, exists, ilike, isNotNull, isNull, lt, or, type SQL, sql } from 'drizzle-orm';
+import { activities, type DbHandle, leads, leadTagLinks, leadTags, pipelineStages, type Transaction } from '@leadora/database';
+import { and, asc, eq, exists, ilike, isNotNull, isNull, lt, or, type SQL, sql } from 'drizzle-orm';
 import type { AuthContext } from '../auth/auth-context';
 import { decodeTimeCursor, encodeTimeCursor } from '../common/cursor';
 import { DB } from '../infra/tokens';
 import { LeadIngestionService } from './lead-ingestion.service';
-import { LeadReader } from './lead-reader.service';
-import type { CreateLeadInput, ListLeadsQuery } from './leads.schemas';
-import { escapeLike } from './normalize';
+import { leadNotFound, LeadReader } from './lead-reader.service';
+import type { CreateLeadInput, ListLeadsQuery, UpdateLeadInput } from './leads.schemas';
+import { escapeLike, normalizeEmail } from './normalize';
+
+const TEXT_FIELDS = ['fullName', 'companyName', 'jobTitle', 'location', 'country', 'industry', 'currency', 'notes'] as const;
 
 @Injectable()
 export class LeadsService {
@@ -52,6 +54,122 @@ export class LeadsService {
     const items = rows.slice(0, q.limit);
     const last = items.at(-1);
     return { items, nextCursor: rows.length > q.limit && last ? encodeTimeCursor(last.createdAt, last.id) : null };
+  }
+
+  private async lockLead(tx: Transaction, organizationId: string, id: string) {
+    const [lead] = await tx
+      .select()
+      .from(leads)
+      .where(and(eq(leads.id, id), eq(leads.organizationId, organizationId)))
+      .for('update');
+    if (!lead) throw leadNotFound();
+    return lead;
+  }
+
+  async update(auth: AuthContext, id: string, input: UpdateLeadInput) {
+    return this.handle.db.transaction(async (tx) => {
+      const current = await this.lockLead(tx, auth.organizationId, id);
+      if (current.archivedAt) {
+        throw new ConflictException({ code: 'LEAD_ARCHIVED', message: 'Restore this lead before editing it' });
+      }
+
+      const patch: Partial<typeof leads.$inferInsert> = {};
+      const changes: Record<string, { from: unknown; to: unknown }> = {};
+      const set = <K extends keyof typeof leads.$inferInsert>(key: K, from: unknown, to: (typeof leads.$inferInsert)[K]) => {
+        if (from === to) return;
+        patch[key] = to;
+        changes[key] = { from, to };
+      };
+
+      if (input.email !== undefined) set('email', current.email, normalizeEmail(input.email));
+      if (input.phone !== undefined) set('phone', current.phone, await this.ingestion.normalizePhoneOrThrow(tx, auth.organizationId, input.phone));
+      if (patch.email !== undefined || patch.phone !== undefined) {
+        const dup = await this.ingestion.findDuplicate(tx, auth.organizationId, patch.email ?? null, patch.phone ?? null, id);
+        if (dup) {
+          throw new ConflictException({
+            code: 'LEAD_DUPLICATE',
+            message: `Another lead already has this ${dup.matchedOn}`,
+            details: dup,
+          });
+        }
+      }
+
+      for (const key of TEXT_FIELDS) {
+        if (input[key] !== undefined) set(key, current[key], input[key] ?? null);
+      }
+      if (input.priority !== undefined) set('priority', current.priority, input.priority);
+      if (input.budget !== undefined) {
+        const from = current.budget === null ? null : Number(current.budget);
+        if (from !== input.budget) {
+          patch.budget = input.budget.toString();
+          changes.budget = { from, to: input.budget };
+        }
+      }
+      if (input.sourceId !== undefined && input.sourceId !== current.sourceId) {
+        set('sourceId', current.sourceId, await this.ingestion.resolveSource(tx, auth.organizationId, input.sourceId, 'MANUAL'));
+      }
+
+      const activityRows: { type: string; payload: Record<string, unknown> }[] = [];
+
+      if (input.ownerUserId !== undefined && input.ownerUserId !== current.ownerUserId) {
+        if (!auth.permissions.has('lead.assign')) {
+          throw new ForbiddenException({ code: 'FORBIDDEN', message: 'You do not have permission to reassign leads' });
+        }
+        patch.ownerUserId = await this.ingestion.resolveOwner(tx, auth.organizationId, input.ownerUserId);
+        activityRows.push({ type: 'lead.assigned', payload: { from: current.ownerUserId, to: patch.ownerUserId } });
+      }
+
+      if (input.stageId !== undefined && input.stageId !== current.stageId) {
+        const [from] = await tx.select({ key: pipelineStages.key }).from(pipelineStages).where(eq(pipelineStages.id, current.stageId));
+        const stage = await this.ingestion.resolveStage(tx, auth.organizationId, input.stageId, current.pipelineId);
+        patch.stageId = stage.id;
+        patch.convertedAt = stage.outcome === 'WON' ? new Date() : null;
+        patch.lostAt = stage.outcome === 'LOST' ? new Date() : null;
+        activityRows.push({ type: 'lead.stage_changed', payload: { from: from!.key, to: stage.key } });
+      }
+
+      if (input.tags !== undefined) {
+        const before = await this.tagNames(tx, id);
+        await this.ingestion.setTags(tx, auth.organizationId, id, input.tags);
+        const after = await this.tagNames(tx, id);
+        if (before.join('\u0000').toLowerCase() !== after.join('\u0000').toLowerCase()) changes.tags = { from: before, to: after };
+      }
+
+      if (Object.keys(patch).length) await tx.update(leads).set(patch).where(eq(leads.id, id));
+      if (Object.keys(changes).length) activityRows.unshift({ type: 'lead.updated', payload: { changes } });
+      if (activityRows.length) {
+        await tx.insert(activities).values(
+          activityRows.map((a) => ({ organizationId: auth.organizationId, leadId: id, actorUserId: auth.userId, ...a })),
+        );
+      }
+      return this.reader.get(auth.organizationId, id, tx);
+    });
+  }
+
+  async setArchived(auth: AuthContext, id: string, archived: boolean) {
+    return this.handle.db.transaction(async (tx) => {
+      const current = await this.lockLead(tx, auth.organizationId, id);
+      if (Boolean(current.archivedAt) !== archived) {
+        await tx.update(leads).set({ archivedAt: archived ? new Date() : null }).where(eq(leads.id, id));
+        await tx.insert(activities).values({
+          organizationId: auth.organizationId,
+          leadId: id,
+          actorUserId: auth.userId,
+          type: archived ? 'lead.archived' : 'lead.restored',
+        });
+      }
+      return this.reader.get(auth.organizationId, id, tx);
+    });
+  }
+
+  private async tagNames(tx: Transaction, leadId: string): Promise<string[]> {
+    const rows = await tx
+      .select({ name: leadTags.name })
+      .from(leadTagLinks)
+      .innerJoin(leadTags, eq(leadTags.id, leadTagLinks.tagId))
+      .where(eq(leadTagLinks.leadId, leadId))
+      .orderBy(asc(leadTags.name));
+    return rows.map((r) => r.name);
   }
 
   async create(auth: AuthContext, input: CreateLeadInput) {

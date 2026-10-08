@@ -1,9 +1,16 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { type AuthContext, CurrentAuth, RequirePermission } from '../auth/auth-context';
 import { ZodPipe } from '../common/zod.pipe';
 import { LeadReader } from './lead-reader.service';
-import { type CreateLeadInput, createLeadSchema, type ListLeadsQuery, listLeadsSchema } from './leads.schemas';
+import {
+  type CreateLeadInput,
+  createLeadSchema,
+  type ListLeadsQuery,
+  listLeadsSchema,
+  type UpdateLeadInput,
+  updateLeadSchema,
+} from './leads.schemas';
 import { LeadsService } from './leads.service';
 
 const Id = new ParseUUIDPipe({ errorHttpStatusCode: 404 });
@@ -33,6 +40,26 @@ export class LeadsController {
   @RequirePermission('lead.view')
   get(@CurrentAuth() auth: AuthContext, @Param('id', Id) id: string) {
     return this.reader.get(auth.organizationId, id);
+  }
+
+  @Patch(':id')
+  @RequirePermission('lead.update')
+  update(@CurrentAuth() auth: AuthContext, @Param('id', Id) id: string, @Body(new ZodPipe(updateLeadSchema)) body: UpdateLeadInput) {
+    return this.leads.update(auth, id, body);
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  @RequirePermission('lead.delete')
+  async archive(@CurrentAuth() auth: AuthContext, @Param('id', Id) id: string) {
+    await this.leads.setArchived(auth, id, true);
+  }
+
+  @Post(':id/restore')
+  @HttpCode(200)
+  @RequirePermission('lead.delete')
+  restore(@CurrentAuth() auth: AuthContext, @Param('id', Id) id: string) {
+    return this.leads.setArchived(auth, id, false);
   }
 
   @Get(':id/activities')

@@ -11,7 +11,7 @@ import {
   type Transaction,
   users,
 } from '@leadora/database';
-import { and, eq, inArray, or, type SQL, sql } from 'drizzle-orm';
+import { and, eq, inArray, ne, or, type SQL, sql } from 'drizzle-orm';
 import type { CreateLeadInput } from './leads.schemas';
 import { normalizeEmail, normalizePhone } from './normalize';
 
@@ -36,23 +36,8 @@ const invalid = (code: string, message: string) => new UnprocessableEntityExcept
 export class LeadIngestionService {
   async ingest(tx: Transaction, ctx: IngestContext, input: CreateLeadInput): Promise<IngestResult> {
     const { organizationId } = ctx;
-    const [org] = await tx
-      .select({ defaultCountry: organizations.defaultCountry })
-      .from(organizations)
-      .where(eq(organizations.id, organizationId));
-
     const email = input.email ? normalizeEmail(input.email) : null;
-    let phone: string | null = null;
-    if (input.phone) {
-      phone = normalizePhone(input.phone, org!.defaultCountry);
-      if (!phone) {
-        throw new UnprocessableEntityException({
-          code: 'VALIDATION_FAILED',
-          message: 'Validation failed',
-          details: [{ path: 'phone', message: 'Not a valid phone number' }],
-        });
-      }
-    }
+    const phone = input.phone ? await this.normalizePhoneOrThrow(tx, organizationId, input.phone) : null;
 
     const duplicate = await this.findDuplicate(tx, organizationId, email, phone);
     if (duplicate) return { status: 'DUPLICATE', ...duplicate };
@@ -98,7 +83,24 @@ export class LeadIngestionService {
     return { status: 'CREATED', leadId: lead!.id };
   }
 
-  private async findDuplicate(tx: Transaction, organizationId: string, email: string | null, phone: string | null) {
+  async normalizePhoneOrThrow(tx: Transaction, organizationId: string, raw: string): Promise<string> {
+    const [org] = await tx
+      .select({ defaultCountry: organizations.defaultCountry })
+      .from(organizations)
+      .where(eq(organizations.id, organizationId));
+    const phone = normalizePhone(raw, org!.defaultCountry);
+    if (!phone) {
+      throw new UnprocessableEntityException({
+        code: 'VALIDATION_FAILED',
+        message: 'Validation failed',
+        details: [{ path: 'phone', message: 'Not a valid phone number' }],
+      });
+    }
+    return phone;
+  }
+
+  /** Archived leads still count: a duplicate is never silently re-created (spec §13). */
+  async findDuplicate(tx: Transaction, organizationId: string, email: string | null, phone: string | null, excludeLeadId?: string) {
     const matchers: SQL[] = [];
     // Serialize concurrent ingestion of the same contact (e.g. a retried webhook) so both can't pass the check.
     if (email) {
@@ -109,21 +111,27 @@ export class LeadIngestionService {
       await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`lead:${organizationId}:${phone}`}))`);
       matchers.push(eq(leads.phone, phone));
     }
+    if (!matchers.length) return null;
     const [match] = await tx
       .select({ id: leads.id, email: leads.email })
       .from(leads)
-      .where(and(eq(leads.organizationId, organizationId), or(...matchers)))
+      .where(and(eq(leads.organizationId, organizationId), or(...matchers), excludeLeadId ? ne(leads.id, excludeLeadId) : undefined))
       .limit(1);
     if (!match) return null;
     return { existingLeadId: match.id, matchedOn: email && match.email === email ? ('email' as const) : ('phone' as const) };
   }
 
-  async resolveStage(tx: Transaction, organizationId: string, stageId?: string) {
+  /** A stage in the organization; with pipelineId, it must also belong to that pipeline. */
+  async resolveStage(tx: Transaction, organizationId: string, stageId?: string, pipelineId?: string) {
     const where = stageId
-      ? and(eq(pipelineStages.id, stageId), eq(pipelineStages.organizationId, organizationId))
+      ? and(
+          eq(pipelineStages.id, stageId),
+          eq(pipelineStages.organizationId, organizationId),
+          pipelineId ? eq(pipelineStages.pipelineId, pipelineId) : undefined,
+        )
       : and(eq(pipelineStages.organizationId, organizationId), eq(pipelines.isDefault, true));
     const [stage] = await tx
-      .select({ id: pipelineStages.id, key: pipelineStages.key, pipelineId: pipelineStages.pipelineId })
+      .select({ id: pipelineStages.id, key: pipelineStages.key, pipelineId: pipelineStages.pipelineId, outcome: pipelineStages.outcome })
       .from(pipelineStages)
       .innerJoin(pipelines, eq(pipelines.id, pipelineStages.pipelineId))
       .where(where)
@@ -133,7 +141,7 @@ export class LeadIngestionService {
     return stage;
   }
 
-  private async resolveSource(tx: Transaction, organizationId: string, sourceId: string | undefined, type: IngestContext['sourceType']) {
+  async resolveSource(tx: Transaction, organizationId: string, sourceId: string | undefined, type: IngestContext['sourceType']) {
     const where = sourceId
       ? and(eq(leadSources.id, sourceId), eq(leadSources.organizationId, organizationId))
       : and(eq(leadSources.organizationId, organizationId), eq(leadSources.type, type));

@@ -27,6 +27,12 @@ export const createLeadSchema = z
   .refine((v) => v.email || v.phone, { message: 'Provide an email or a phone number', path: ['email'] });
 export type CreateLeadInput = z.infer<typeof createLeadSchema>;
 
+export const updateLeadSchema = z
+  .object(leadFields)
+  .partial()
+  .refine((v) => Object.keys(v).length > 0, { message: 'Provide at least one field to update' });
+export type UpdateLeadInput = z.infer<typeof updateLeadSchema>;
+
 export const listLeadsSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
   cursor: z.string().max(200).optional(),

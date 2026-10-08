@@ -1,4 +1,5 @@
 import {
+  bigint,
   index,
   integer,
   jsonb,
@@ -110,6 +111,8 @@ export const activities = pgTable(
   'activities',
   {
     id: id(),
+    // Insertion order: activities written in one transaction share a timestamp.
+    seq: bigint({ mode: 'number' }).notNull().generatedAlwaysAsIdentity(),
     organizationId: uuid()
       .notNull()
       .references(() => organizations.id, { onDelete: 'cascade' }),
@@ -121,7 +124,7 @@ export const activities = pgTable(
     payload: jsonb(),
     createdAt: timestamp(ms).notNull().defaultNow(),
   },
-  (t) => [index('activities_lead_created_idx').on(t.leadId, t.createdAt.desc(), t.id.desc())],
+  (t) => [index('activities_lead_seq_idx').on(t.leadId, t.seq.desc())],
 );
 
 export type Lead = typeof leads.$inferSelect;
