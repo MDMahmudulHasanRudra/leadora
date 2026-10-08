@@ -9,3 +9,4 @@ export * from './lead-sources';
 export * from './leads';
 export * from './lead-imports';
 export * from './custom-fields';
+export * from './followups';

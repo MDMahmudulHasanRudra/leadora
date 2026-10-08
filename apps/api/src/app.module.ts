@@ -7,6 +7,7 @@ import { HealthModule } from './health/health.module';
 import { InfraModule } from './infra/infra.module';
 import { QueuesModule } from './infra/queues.module';
 import { CustomFieldsModule } from './custom-fields/custom-fields.module';
+import { FollowupsModule } from './followups/followups.module';
 import { LeadsModule } from './leads/leads.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { TeamsModule } from './teams/teams.module';
@@ -25,6 +26,7 @@ import { UsersModule } from './users/users.module';
     OrganizationsModule,
     LeadsModule,
     CustomFieldsModule,
+    FollowupsModule,
   ],
 })
 export class AppModule {}
