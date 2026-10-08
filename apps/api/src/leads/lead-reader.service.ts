@@ -10,6 +10,7 @@ import {
   type Transaction,
   users,
 } from '@leadora/database';
+import { readCustomFields } from '@leadora/domain';
 import { and, asc, desc, eq, inArray, type SQL } from 'drizzle-orm';
 import { DB } from '../infra/tokens';
 
@@ -78,6 +79,8 @@ export class LeadReader {
           .orderBy(asc(leadTags.name))
       : [];
 
+    const customFields = await readCustomFields(db, organizationId, 'lead', rows.map((r) => r.id));
+
     return rows.map((r) => ({
       id: r.id,
       fullName: r.fullName,
@@ -99,6 +102,7 @@ export class LeadReader {
       stage: { id: r.stageId, key: r.stageKey, name: r.stageName, color: r.stageColor, outcome: r.stageOutcome },
       owner: r.ownerId ? { id: r.ownerId, fullName: r.ownerName } : null,
       tags: tagRows.filter((t) => t.leadId === r.id).map((t) => t.name),
+      customFields: customFields.get(r.id) ?? {},
       lastContactedAt: r.lastContactedAt,
       nextFollowupAt: r.nextFollowupAt,
       convertedAt: r.convertedAt,

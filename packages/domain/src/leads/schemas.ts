@@ -30,6 +30,8 @@ export const leadFields = {
   stageId: z.uuid().optional(),
   ownerUserId: z.uuid().nullable().optional(),
   tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
+  // Shape-checked here; values are validated against the organization's definitions during ingestion.
+  customFields: z.record(z.string().max(60), z.unknown()).optional(),
 };
 
 export const createLeadSchema = z

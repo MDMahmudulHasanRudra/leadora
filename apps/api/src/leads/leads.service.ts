@@ -10,7 +10,11 @@ import {
   escapeLike,
   findDuplicate,
   ingestLead,
+  loadCustomFieldDefinitions,
   normalizeEmail,
+  readCustomFields,
+  validateCustomFields,
+  writeCustomFields,
   normalizePhoneOrThrow,
   resolveOwner,
   resolveSource,
@@ -141,6 +145,18 @@ export class LeadsService {
         await setLeadTags(tx, auth.organizationId, id, input.tags);
         const after = await this.tagNames(tx, id);
         if (before.join('\u0000').toLowerCase() !== after.join('\u0000').toLowerCase()) changes.tags = { from: before, to: after };
+      }
+
+      if (input.customFields !== undefined) {
+        const values = validateCustomFields(await loadCustomFieldDefinitions(tx, auth.organizationId, 'lead'), input.customFields, 'update');
+        const before = (await readCustomFields(tx, auth.organizationId, 'lead', [id])).get(id) ?? {};
+        await writeCustomFields(tx, auth.organizationId, id, values);
+        for (const [def, to] of values) {
+          const from = before[def.key] ?? null;
+          if (JSON.stringify(from) !== JSON.stringify(to)) changes[`customFields.${def.key}`] = { from, to };
+        }
+        // Custom-field-only edits still need updated_at to move.
+        if (!Object.keys(patch).length && Object.keys(changes).length) patch.updatedAt = new Date();
       }
 
       if (Object.keys(patch).length) await tx.update(leads).set(patch).where(eq(leads.id, id));

@@ -6,6 +6,7 @@ import { loggerParams } from './common/logging';
 import { HealthModule } from './health/health.module';
 import { InfraModule } from './infra/infra.module';
 import { QueuesModule } from './infra/queues.module';
+import { CustomFieldsModule } from './custom-fields/custom-fields.module';
 import { LeadsModule } from './leads/leads.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { TeamsModule } from './teams/teams.module';
@@ -23,6 +24,7 @@ import { UsersModule } from './users/users.module';
     TeamsModule,
     OrganizationsModule,
     LeadsModule,
+    CustomFieldsModule,
   ],
 })
 export class AppModule {}

@@ -11,6 +11,7 @@ import {
   users,
 } from '@leadora/database';
 import { and, eq, inArray, ne, or, type SQL, sql } from 'drizzle-orm';
+import { loadCustomFieldDefinitions, validateCustomFields, writeCustomFields } from '../custom-fields/values';
 import { DomainError } from '../errors';
 import { normalizeEmail, normalizePhone } from './normalize';
 import type { CreateLeadInput } from './schemas';
@@ -38,6 +39,12 @@ export async function ingestLead(tx: Transaction, ctx: IngestContext, input: Cre
   const { organizationId } = ctx;
   const email = input.email ? normalizeEmail(input.email) : null;
   const phone = input.phone ? await normalizePhoneOrThrow(tx, organizationId, input.phone) : null;
+
+  const customFields = validateCustomFields(
+    await loadCustomFieldDefinitions(tx, organizationId, 'lead'),
+    input.customFields ?? {},
+    'create',
+  );
 
   const duplicate = await findDuplicate(tx, organizationId, email, phone);
   if (duplicate) return { status: 'DUPLICATE', ...duplicate };
@@ -71,6 +78,7 @@ export async function ingestLead(tx: Transaction, ctx: IngestContext, input: Cre
     .returning({ id: leads.id });
 
   if (input.tags?.length) await setLeadTags(tx, organizationId, lead!.id, input.tags);
+  if (customFields.size) await writeCustomFields(tx, organizationId, lead!.id, customFields);
 
   await tx.insert(activities).values({
     organizationId,
