@@ -106,4 +106,6 @@ export const replySchema = z.strictObject({
   reply: z.string().max(4000),
   language: z.enum(['en', 'bn']),
   notes: z.string().max(400),
+  // Ids of knowledge-base sources (S1, S2…) the reply relies on; empty when none were given or used.
+  citations: z.array(z.string().max(5)).max(8),
 });

@@ -11,7 +11,7 @@ Follows spec §103–§114 and the sprint backlog in §148. Each phase is done o
 | 2 | Communication: inbox, conversations, messages, realtime, email adapter, webhooks | Not started |
 | 3 | AI foundation: provider abstraction, OpenAI Responses API, settings, usage logging, prompt versioning, structured outputs | Done |
 | 4 | AI intelligence: scoring, conversation analysis, summaries, reply assistant, next action, NL search | Done |
-| 5 | Knowledge base / RAG with pgvector and citations | Not started |
+| 5 | Knowledge base / RAG with pgvector and citations | Done |
 | 6 | Automation engine | Not started |
 | 7 | Integrations: WhatsApp, Facebook, Instagram, web chat, API keys | Not started |
 | 8 | Analytics & forecasting | Not started |
@@ -119,7 +119,7 @@ Follow-ups noted, not done:
 
 ## Phase 5 — Knowledge base (RAG)
 
-Slices: (1) storage + sources + indexing pipeline ✅ · (2) permission-aware retrieval + cited answers ✅ · (3) knowledge base UI ✅ · (4) grounded reply drafts.
+Slices: (1) storage + sources + indexing pipeline ✅ · (2) permission-aware retrieval + cited answers ✅ · (3) knowledge base UI ✅ · (4) grounded reply drafts ✅.
 
 ### Decisions
 
@@ -130,6 +130,7 @@ Slices: (1) storage + sources + indexing pipeline ✅ · (2) permission-aware re
 - **Vectors:** pgvector, `vector(1536)` with an HNSW cosine index. The embedding model is asked for 1536 dimensions. Each document records the model that embedded it. If the org's embedding model changes, older documents show as OUTDATED and are left out of retrieval until re-indexed, because vectors from different models can't be compared.
 - **Retrieval** is hybrid: vector similarity plus Postgres full-text (`simple` config, so Bangla isn't stemmed wrongly), merged by reciprocal rank fusion. The access filter is applied inside the SQL (spec §35).
 - **Answers** cite their sources (spec §34, §37): the model sees numbered source blocks and must return the ids it used. Ids it wasn't given are dropped. With no evidence the answer says so without calling the model.
+- **Grounded reply drafts:** suggest/rewrite retrieve up to 4 passages for the customer's latest message (or the draft), using the same access filter, and cite what they used. This is best effort: with the knowledge base off, empty or failing, drafting falls back to `[placeholders]`.
 
 ### Threat model additions
 

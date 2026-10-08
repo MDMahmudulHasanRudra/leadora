@@ -77,6 +77,7 @@ export function InboxView({
   const [draft, setDraft] = useState('');
   const [aiDrafted, setAiDrafted] = useState(false);
   const [aiNote, setAiNote] = useState<string | null>(null);
+  const [aiSources, setAiSources] = useState<{ id: string; documentId: string; title: string; sourceUrl: string | null }[]>([]);
   const [aiBusy, setAiBusy] = useState(false);
   const thread = useRef<HTMLOListElement>(null);
   const href = (params: { view?: string; c?: string }) => {
@@ -113,6 +114,7 @@ export function InboxView({
     setDraft('');
     setAiDrafted(false);
     setAiNote(null);
+    setAiSources([]);
   }, [selected?.id]);
 
   async function onSend(e: FormEvent<HTMLFormElement>) {
@@ -128,6 +130,7 @@ export function InboxView({
       setDraft('');
       setAiDrafted(false);
       setAiNote(null);
+      setAiSources([]);
     }
   }
 
@@ -137,13 +140,14 @@ export function InboxView({
     setAiBusy(true);
     setError(null);
     try {
-      const res = await api<{ reply: string; notes: string }>(`/ai/conversations/${selected.id}/reply`, {
+      const res = await api<{ reply: string; notes: string; citations: { id: string; documentId: string; title: string; sourceUrl: string | null }[] }>(`/ai/conversations/${selected.id}/reply`, {
         method: 'POST',
         body: { ...req, ...(req.mode !== 'suggest' ? { draft } : {}) },
       });
       setDraft(res.reply);
       setAiDrafted(true);
       setAiNote(res.notes || null);
+      setAiSources(res.citations);
     } catch (err) {
       setError(explainAiError(err, can.aiConfigure, 'Reply suggestions').message);
     } finally {
@@ -292,6 +296,19 @@ export function InboxView({
                   <p className="mt-1 text-xs text-zinc-500">
                     AI draft — check it before sending.{aiNote ? ` ${aiNote}` : ''}
                     {PLACEHOLDER.test(draft) && <span className="font-medium text-amber-700 dark:text-amber-400"> Fill in the [placeholders].</span>}
+                    {aiSources.length > 0 && (
+                      <span className="block">
+                        Based on:{' '}
+                        {aiSources.map((c, i) => (
+                          <span key={c.id}>
+                            {i > 0 && ', '}
+                            <a href={c.sourceUrl ?? `/api/v1/kb/documents/${c.documentId}/source`} target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline">
+                              {c.title}
+                            </a>
+                          </span>
+                        ))}
+                      </span>
+                    )}
                   </p>
                 )}
                 <div className="mt-2 flex items-center justify-between">

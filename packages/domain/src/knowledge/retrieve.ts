@@ -1,6 +1,7 @@
 import { type Database, EMBEDDING_DIMENSIONS, kbChunks, kbCollections, kbDocuments, kbSettings, teamMembers } from '@leadora/database';
 import { and, eq, inArray, or, type SQL, sql } from 'drizzle-orm';
 import { type AiContext, type AiDeps, runEmbedding } from '../ai/gateway';
+import { dataBlock } from '../ai/prompts';
 
 export interface KnowledgeViewer {
   organizationId: string;
@@ -112,3 +113,7 @@ export async function retrieve(
   add(keyword, () => true);
   return [...fused.values()].sort((a, b) => b.score - a.score).slice(0, topK);
 }
+
+/** A numbered source as the model sees it: where it comes from, then the text (spec §34). */
+export const sourceBlock = (id: string, c: RetrievedChunk) =>
+  dataBlock(id, `${c.documentTitle}${c.page ? `, page ${c.page}` : ''}${c.section ? ` — ${c.section}` : ''}\n${c.content}`);

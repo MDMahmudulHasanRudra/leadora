@@ -92,9 +92,9 @@ describe('AI on conversations: analysis, summary and reply assistant (spec §31�
   });
 
   it('suggests a reply without sending anything', async () => {
-    fake.reply(JSON.stringify({ reply: 'Thanks for asking! For 300 units the price is [price per unit].', language: 'en', notes: 'Fill in the unit price.' }));
+    fake.reply(JSON.stringify({ reply: 'Thanks for asking! For 300 units the price is [price per unit].', language: 'en', notes: 'Fill in the unit price.', citations: [] }));
     const { body } = await reply(admin, { mode: 'suggest', tone: 'friendly' }).expect(200);
-    expect(body).toEqual({ reply: 'Thanks for asking! For 300 units the price is [price per unit].', language: 'en', notes: 'Fill in the unit price.' });
+    expect(body).toEqual({ reply: 'Thanks for asking! For 300 units the price is [price per unit].', language: 'en', notes: 'Fill in the unit price.', citations: [] });
     expect(fake.requests[0]!.input).toContain('Mode: suggest');
     expect(fake.requests[0]!.input).toContain('Tone: friendly');
 
@@ -104,7 +104,7 @@ describe('AI on conversations: analysis, summary and reply assistant (spec §31�
 
   it('rewrites and translates a draft, and requires one', async () => {
     await reply(admin, { mode: 'rewrite' }).expect(422);
-    fake.reply(JSON.stringify({ reply: 'ধন্যবাদ! ৩০০ ইউনিটের দাম [price per unit]।', language: 'bn', notes: '' }));
+    fake.reply(JSON.stringify({ reply: 'ধন্যবাদ! ৩০০ ইউনিটের দাম [price per unit]।', language: 'bn', notes: '', citations: [] }));
     const { body } = await reply(admin, { mode: 'translate', draft: 'Thanks! The price for 300 units is [price per unit].', language: 'bn' }).expect(200);
     expect(body.language).toBe('bn');
     expect(fake.requests[0]!.input).toContain('<data label="draft">');

@@ -1,5 +1,5 @@
 import { FakeAiProvider } from '@leadora/ai';
-import { indexDocument } from '@leadora/domain';
+import { indexDocument, processInboundEvent } from '@leadora/domain';
 import type { StorageProvider } from '@leadora/storage';
 import { Queue } from 'bullmq';
 import { sql } from 'drizzle-orm';
@@ -8,8 +8,10 @@ import { AiService } from '../../src/ai/ai.service';
 import { AI_PROVIDER_FACTORY, ENV, STORAGE } from '../../src/infra/tokens';
 import { createTestApp, type TestApp } from '../support/app';
 import { login, ORIGIN, registerAdmin } from '../support/fixtures';
+import { createEmailInbox, startConversation } from '../support/inbox';
 import { createOtherOrg } from '../support/orgs';
 import { testEnv } from '../support/test-env';
+import { postInbound } from '../support/webhook';
 
 const PRICING = 'Blue model costs 120 BDT per unit. Bulk orders over 300 units get 5% off. Delivery inside Dhaka takes two days.';
 
@@ -185,6 +187,28 @@ describe('knowledge base: sources, indexing, retrieval and cited answers (spec Â
     await expect(storage.get(keys[0]!.storage_key)).rejects.toThrow('File not found');
     const { body: audit } = await admin.get('/api/v1/audit-logs').expect(200);
     expect(audit.items.map((a: { action: string }) => a.action)).toEqual(expect.arrayContaining(['kb.document_created', 'kb.document_deleted']));
+  });
+
+  it('grounds AI reply drafts in the knowledge base and cites the sources used', async () => {
+    const doc = await addText('Pricing', PRICING);
+    const lead = (await admin.post('/api/v1/leads').set('Origin', ORIGIN).send({ fullName: 'Nadia', email: 'nadia@customer.test' }).expect(201)).body;
+    const { inbox, webhookSecret } = await createEmailInbox(admin);
+    const conv = (await startConversation(admin, { inboxId: inbox.id, leadId: lead.id, subject: 'Hello', body: 'Hi Nadia, how can we help?' }).expect(201)).body.conversation;
+    const res = await postInbound(t, inbox.id, webhookSecret, {
+      messageId: '<kb-1@customer.test>',
+      from: { email: 'nadia@customer.test', name: 'Nadia' },
+      to: 'sales@acme.test',
+      subject: 'Re: Hello',
+      text: 'Do bulk orders over 300 units get a discount?',
+    }).expect(202);
+    await processInboundEvent(t.db, res.body.eventId);
+
+    fake.reply(JSON.stringify({ reply: 'Yes â€” orders over 300 units get 5% off.', language: 'en', notes: '', citations: ['S1', 'S7'] }));
+    const { body } = await admin.post(`/api/v1/ai/conversations/${conv.id}/reply`).set('Origin', ORIGIN).send({ mode: 'suggest' }).expect(200);
+    expect(body.citations).toEqual([expect.objectContaining({ id: 'S1', documentId: doc.id, title: 'Pricing' })]);
+    expect(fake.requests[0]!.input).toContain('<data label="S1">');
+    // Retrieval used the customer's latest question.
+    expect(fake.embedRequests.at(-1)!.input).toEqual(['Do bulk orders over 300 units get a discount?']);
   });
 
   it('is off unless the installation enables it, and stays per organization', async () => {

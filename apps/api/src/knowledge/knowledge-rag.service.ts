@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { DbHandle } from '@leadora/database';
-import { dataBlock, retrieve, type RetrievedChunk, runStructured } from '@leadora/domain';
+import { dataBlock, retrieve, type RetrievedChunk, runStructured, sourceBlock } from '@leadora/domain';
 import { AiService } from '../ai/ai.service';
 import type { AuthContext } from '../auth/auth-context';
 import { DB } from '../infra/tokens';
@@ -20,10 +20,6 @@ const citation = (id: string, c: RetrievedChunk) => ({
   section: c.section,
   snippet: c.content.slice(0, 280),
 });
-
-/** A source block as the model sees it: id, where it comes from, then the text (spec §34). */
-export const sourceBlock = (id: string, c: RetrievedChunk) =>
-  dataBlock(id, `${c.documentTitle}${c.page ? `, page ${c.page}` : ''}${c.section ? ` — ${c.section}` : ''}\n${c.content}`);
 
 @Injectable()
 export class KnowledgeRagService {

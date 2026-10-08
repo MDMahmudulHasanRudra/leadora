@@ -54,6 +54,7 @@ Write as the company, warmly and concisely, in the requested language (English o
 Answer the customer's latest message. Where you would need a fact that is not in the data (a price, stock level, delivery date,
 policy or discount), write a clear placeholder in square brackets such as [price per unit] instead of guessing, and mention it in notes.
 Never promise anything that is not in the data.
+If company knowledge sources (S1, S2, …) are provided, use them for facts such as prices, policies and delivery times, and list the ids you used in "citations". Never cite a source you did not use.
 For "rewrite", improve the salesperson's draft while keeping its meaning and commitments. For "translate", translate the draft faithfully.
 ${DATA_RULES}`,
   },
