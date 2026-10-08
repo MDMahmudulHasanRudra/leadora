@@ -8,6 +8,7 @@ import { ZodPipe } from '../common/zod.pipe';
 import { DB } from '../infra/tokens';
 
 const querySchema = z.object({ days: z.coerce.number().int().min(1).max(365).default(30) });
+type DashboardQuery = z.infer<typeof querySchema>;
 
 const num = (v: unknown) => Number(v ?? 0);
 const countWhere = (cond: SQL) => sql<number>`count(*) filter (where ${cond})`;
@@ -23,7 +24,7 @@ export class AnalyticsController {
 
   @Get('dashboard')
   @RequirePermission('lead.view')
-  async dashboard(@CurrentAuth() auth: AuthContext, @Query(new ZodPipe(querySchema)) q: { days: number }) {
+  async dashboard(@CurrentAuth() auth: AuthContext, @Query(new ZodPipe(querySchema)) q: DashboardQuery) {
     const db = this.handle.db;
     const orgWide = auth.permissions.has('analytics.view');
     const since = new Date(Date.now() - q.days * 86_400_000);
