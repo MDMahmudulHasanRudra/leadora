@@ -14,6 +14,7 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 import { citext, id } from './columns';
+import { companies, contacts } from './contacts';
 import { leadSources } from './lead-sources';
 import { organizations } from './organizations';
 import { pipelineStages, pipelines } from './pipelines';
@@ -59,6 +60,9 @@ export const leads = pgTable(
     notes: text(),
     metadata: jsonb(),
     createdByUserId: uuid().references(() => users.id, { onDelete: 'set null' }),
+    // Set on conversion (spec §9); the lead itself is kept for history.
+    contactId: uuid().references(() => contacts.id, { onDelete: 'set null' }),
+    companyId: uuid().references(() => companies.id, { onDelete: 'set null' }),
     lastContactedAt: timestamp(ms),
     nextFollowupAt: timestamp(ms),
     convertedAt: timestamp(ms),

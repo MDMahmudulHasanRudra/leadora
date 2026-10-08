@@ -9,6 +9,7 @@ import { QueuesModule } from './infra/queues.module';
 import { CustomFieldsModule } from './custom-fields/custom-fields.module';
 import { FollowupsModule } from './followups/followups.module';
 import { TasksModule } from './tasks/tasks.module';
+import { ContactsModule } from './contacts/contacts.module';
 import { LeadsModule } from './leads/leads.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { TeamsModule } from './teams/teams.module';
@@ -29,6 +30,7 @@ import { UsersModule } from './users/users.module';
     CustomFieldsModule,
     FollowupsModule,
     TasksModule,
+    ContactsModule,
   ],
 })
 export class AppModule {}
