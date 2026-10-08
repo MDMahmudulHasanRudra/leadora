@@ -13,6 +13,7 @@ import {
 import { and, eq, inArray, ne, or, type SQL, sql } from 'drizzle-orm';
 import { loadCustomFieldDefinitions, validateCustomFields, writeCustomFields } from '../custom-fields/values';
 import { DomainError } from '../errors';
+import { pickOwnerByRules } from './assignment';
 import { normalizeEmail, normalizePhone } from './normalize';
 import type { CreateLeadInput } from './schemas';
 
@@ -27,6 +28,8 @@ export interface IngestContext {
   actorUserId: string | null;
   /** Used when the input has no sourceId. */
   sourceType: IngestSourceType;
+  /** With no explicit owner: pick one via assignment rules (falling back to the actor). */
+  autoAssign?: boolean;
 }
 
 const invalid = (code: string, message: string) => new DomainError('invalid', code, message);
@@ -50,8 +53,24 @@ export async function ingestLead(tx: Transaction, ctx: IngestContext, input: Cre
   if (duplicate) return { status: 'DUPLICATE', ...duplicate };
 
   const stage = await resolveStage(tx, organizationId, input.stageId);
-  const sourceId = await resolveSource(tx, organizationId, input.sourceId, ctx.sourceType);
-  const ownerUserId = input.ownerUserId === undefined ? ctx.actorUserId : await resolveOwner(tx, organizationId, input.ownerUserId);
+  const source = await resolveSource(tx, organizationId, input.sourceId, ctx.sourceType);
+  const sourceId = source.id;
+  let ownerUserId: string | null = ctx.actorUserId;
+  let assignmentRule: string | undefined;
+  if (input.ownerUserId !== undefined) {
+    ownerUserId = await resolveOwner(tx, organizationId, input.ownerUserId);
+  } else if (ctx.autoAssign) {
+    const pick = await pickOwnerByRules(tx, organizationId, {
+      sourceType: source.type,
+      country: input.country,
+      tags: input.tags,
+      priority: input.priority ?? 'MEDIUM',
+    });
+    if (pick) {
+      ownerUserId = pick.userId;
+      assignmentRule = pick.ruleName;
+    }
+  }
 
   const [lead] = await tx
     .insert(leads)
@@ -85,7 +104,7 @@ export async function ingestLead(tx: Transaction, ctx: IngestContext, input: Cre
     leadId: lead!.id,
     actorUserId: ctx.actorUserId,
     type: 'lead.created',
-    payload: { sourceType: ctx.sourceType, stage: stage.key, ownerUserId },
+    payload: { sourceType: source.type, stage: stage.key, ownerUserId, ...(assignmentRule ? { assignmentRule } : {}) },
   });
   return { status: 'CREATED', leadId: lead!.id };
 }
@@ -154,9 +173,9 @@ export async function resolveSource(tx: Transaction, organizationId: string, sou
   const where = sourceId
     ? and(eq(leadSources.id, sourceId), eq(leadSources.organizationId, organizationId))
     : and(eq(leadSources.organizationId, organizationId), eq(leadSources.type, type));
-  const [source] = await tx.select({ id: leadSources.id }).from(leadSources).where(where).limit(1);
+  const [source] = await tx.select({ id: leadSources.id, type: leadSources.type }).from(leadSources).where(where).limit(1);
   if (!source) throw invalid('INVALID_SOURCE', 'Lead source not found');
-  return source.id;
+  return source;
 }
 
 export async function resolveOwner(tx: Transaction, organizationId: string, ownerUserId: string | null) {

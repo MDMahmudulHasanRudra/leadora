@@ -1,4 +1,4 @@
-import { index, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { boolean, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { id } from './columns';
 import { organizations } from './organizations';
 import { users } from './users';
@@ -32,6 +32,7 @@ export const leadImports = pgTable(
     rowCount: integer().notNull(),
     mapping: jsonb().$type<Record<string, string>>(),
     ownerUserId: uuid().references(() => users.id, { onDelete: 'set null' }),
+    autoAssign: boolean().notNull().default(false),
     // Checkpoint: rows fully handled. Each row and this counter commit together.
     processedRows: integer().notNull().default(0),
     importedCount: integer().notNull().default(0),

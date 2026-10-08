@@ -10,6 +10,7 @@ import { CustomFieldsModule } from './custom-fields/custom-fields.module';
 import { FollowupsModule } from './followups/followups.module';
 import { TasksModule } from './tasks/tasks.module';
 import { ContactsModule } from './contacts/contacts.module';
+import { AssignmentModule } from './assignment/assignment.module';
 import { LeadsModule } from './leads/leads.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { TeamsModule } from './teams/teams.module';
@@ -31,6 +32,7 @@ import { UsersModule } from './users/users.module';
     FollowupsModule,
     TasksModule,
     ContactsModule,
+    AssignmentModule,
   ],
 })
 export class AppModule {}

@@ -64,6 +64,13 @@ export class LeadsController {
     return this.leads.setArchived(auth, id, false);
   }
 
+  @Post(':id/auto-assign')
+  @HttpCode(200)
+  @RequirePermission('lead.assign')
+  autoAssign(@CurrentAuth() auth: AuthContext, @Param('id', Id) id: string) {
+    return this.leads.autoAssign(auth, id);
+  }
+
   @Post(':id/notes')
   @HttpCode(201)
   @RequirePermission('lead.update')

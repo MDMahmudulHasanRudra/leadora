@@ -69,7 +69,7 @@ export async function processLeadImport(db: Database, importId: string): Promise
   }
 
   const [, ...rows] = parseCsv(imp.content);
-  const ctx = { organizationId: imp.organizationId, actorUserId: imp.createdByUserId, sourceType: 'CSV' as const };
+  const ctx = { organizationId: imp.organizationId, actorUserId: imp.createdByUserId, sourceType: 'CSV' as const, autoAssign: imp.autoAssign };
 
   try {
     for (let i = imp.processedRows; i < rows.length; i++) {

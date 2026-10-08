@@ -85,6 +85,13 @@
       "when": 1791439934110,
       "tag": "0011_contacts_companies",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791440219120,
+      "tag": "0012_assignment_rules",
+      "breakpoints": true
     }
   ]
 }

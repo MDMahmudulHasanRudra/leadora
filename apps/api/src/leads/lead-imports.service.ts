@@ -31,7 +31,7 @@ export class LeadImportsService {
     return { id: row!.id, fileName, status: row!.status, headers, rowCount, sample, suggestedMapping: suggestMapping(headers) };
   }
 
-  async start(auth: AuthContext, id: string, mapping: ImportMapping, ownerUserId: string | null | undefined) {
+  async start(auth: AuthContext, id: string, mapping: ImportMapping, ownerUserId: string | null | undefined, autoAssign = false) {
     return this.handle.db.transaction(async (tx) => {
       const [imp] = await tx
         .select({ id: leadImports.id, status: leadImports.status, headers: leadImports.headers })
@@ -48,7 +48,7 @@ export class LeadImportsService {
       }
       const owner = ownerUserId === undefined ? null : await resolveOwner(tx, auth.organizationId, ownerUserId);
 
-      await tx.update(leadImports).set({ status: 'QUEUED', mapping, ownerUserId: owner }).where(eq(leadImports.id, id));
+      await tx.update(leadImports).set({ status: 'QUEUED', mapping, ownerUserId: owner, autoAssign: autoAssign && ownerUserId === undefined }).where(eq(leadImports.id, id));
       // Enqueue before commit: if the commit then fails, the worker finds the import still UPLOADED and skips it.
       await this.queue.add(
         'lead.import',

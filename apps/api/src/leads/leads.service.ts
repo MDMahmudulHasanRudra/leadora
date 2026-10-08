@@ -1,5 +1,5 @@
-import { ConflictException, ForbiddenException, Inject, Injectable } from '@nestjs/common';
-import { activities, type DbHandle, leads, leadTagLinks, leadTags, pipelineStages, type Transaction } from '@leadora/database';
+import { ConflictException, ForbiddenException, Inject, Injectable, UnprocessableEntityException } from '@nestjs/common';
+import { activities, type DbHandle, leadSources, leads, leadTagLinks, leadTags, pipelineStages, type Transaction } from '@leadora/database';
 import { and, asc, eq, exists, ilike, isNotNull, isNull, lt, or, type SQL, sql } from 'drizzle-orm';
 import type { AuthContext } from '../auth/auth-context';
 import { decodeTimeCursor, encodeTimeCursor } from '../common/cursor';
@@ -16,6 +16,7 @@ import {
   validateCustomFields,
   writeCustomFields,
   normalizePhoneOrThrow,
+  pickOwnerByRules,
   resolveOwner,
   resolveSource,
   resolveStage,
@@ -118,7 +119,7 @@ export class LeadsService {
         }
       }
       if (input.sourceId !== undefined && input.sourceId !== current.sourceId) {
-        set('sourceId', current.sourceId, await resolveSource(tx, auth.organizationId, input.sourceId, 'MANUAL'));
+        set('sourceId', current.sourceId, (await resolveSource(tx, auth.organizationId, input.sourceId, 'MANUAL')).id);
       }
 
       const activityRows: { type: string; payload: Record<string, unknown> }[] = [];
@@ -165,6 +166,33 @@ export class LeadsService {
         await tx.insert(activities).values(
           activityRows.map((a) => ({ organizationId: auth.organizationId, leadId: id, actorUserId: auth.userId, ...a })),
         );
+      }
+      return this.reader.get(auth.organizationId, id, tx);
+    });
+  }
+
+  /** Re-runs assignment rules for an existing lead (spec §17). */
+  async autoAssign(auth: AuthContext, id: string) {
+    return this.handle.db.transaction(async (tx) => {
+      const current = await this.lockLead(tx, auth.organizationId, id);
+      if (current.archivedAt) throw new ConflictException({ code: 'LEAD_ARCHIVED', message: 'Restore this lead first' });
+      const [source] = await tx.select({ type: leadSources.type }).from(leadSources).where(eq(leadSources.id, current.sourceId));
+      const pick = await pickOwnerByRules(tx, auth.organizationId, {
+        sourceType: source!.type,
+        country: current.country,
+        tags: await this.tagNames(tx, id),
+        priority: current.priority,
+      });
+      if (!pick) throw new UnprocessableEntityException({ code: 'NO_MATCHING_RULE', message: 'No assignment rule matches this lead' });
+      if (pick.userId !== current.ownerUserId) {
+        await tx.update(leads).set({ ownerUserId: pick.userId }).where(eq(leads.id, id));
+        await tx.insert(activities).values({
+          organizationId: auth.organizationId,
+          leadId: id,
+          actorUserId: auth.userId,
+          type: 'lead.assigned',
+          payload: { from: current.ownerUserId, to: pick.userId, assignmentRule: pick.ruleName },
+        });
       }
       return this.reader.get(auth.organizationId, id, tx);
     });

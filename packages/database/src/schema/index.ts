@@ -12,3 +12,4 @@ export * from './custom-fields';
 export * from './followups';
 export * from './tasks';
 export * from './contacts';
+export * from './assignment-rules';

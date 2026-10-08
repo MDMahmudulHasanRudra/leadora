@@ -22,7 +22,12 @@ import { LeadImportsService } from './lead-imports.service';
 
 const Id = new ParseUUIDPipe({ errorHttpStatusCode: 404 });
 
-const startSchema = z.object({ mapping: importMappingSchema, ownerUserId: z.uuid().nullable().optional() });
+const startSchema = z.object({
+  mapping: importMappingSchema,
+  ownerUserId: z.uuid().nullable().optional(),
+  // Use assignment rules for rows when no owner is chosen.
+  autoAssign: z.boolean().optional(),
+});
 type StartBody = z.infer<typeof startSchema>;
 
 @ApiTags('lead-imports')
@@ -54,7 +59,7 @@ export class LeadImportsController {
   @HttpCode(202)
   @RequirePermission('lead.import')
   start(@CurrentAuth() auth: AuthContext, @Param('id', Id) id: string, @Body(new ZodPipe(startSchema)) body: StartBody) {
-    return this.imports.start(auth, id, body.mapping, body.ownerUserId);
+    return this.imports.start(auth, id, body.mapping, body.ownerUserId, body.autoAssign);
   }
 
   @Get(':id/errors.csv')
