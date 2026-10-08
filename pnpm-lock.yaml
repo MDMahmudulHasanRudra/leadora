@@ -39,6 +39,9 @@ importers:
       '@leadora/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@leadora/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@nestjs/common':
         specifier: ^12.1.2
         version: 12.1.2(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -63,9 +66,6 @@ importers:
       ioredis:
         specifier: ^6.0.0
         version: 6.0.0
-      libphonenumber-js:
-        specifier: ^1.13.14
-        version: 1.13.14
       nestjs-pino:
         specifier: ^5.3.1
         version: 5.3.1(@nestjs/common@12.1.2(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.1.2)(pino-http@11.0.0)(pino@10.4.0)(rxjs@7.8.2)
@@ -183,6 +183,21 @@ importers:
       drizzle-kit:
         specifier: ^0.31.11
         version: 0.31.11
+
+  packages/domain:
+    dependencies:
+      '@leadora/database':
+        specifier: workspace:*
+        version: link:../database
+      drizzle-orm:
+        specifier: ^0.45.3
+        version: 0.45.3(@types/pg@8.23.1)(pg@8.23.1)
+      libphonenumber-js:
+        specifier: ^1.13.14
+        version: 1.13.14
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
 
 packages:
 

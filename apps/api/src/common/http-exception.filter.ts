@@ -1,5 +1,13 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { DomainError, type DomainErrorKind } from '@leadora/domain';
 import type { Request, Response } from 'express';
+
+const DOMAIN_STATUS: Record<DomainErrorKind, number> = {
+  invalid: HttpStatus.UNPROCESSABLE_ENTITY,
+  conflict: HttpStatus.CONFLICT,
+  not_found: HttpStatus.NOT_FOUND,
+  forbidden: HttpStatus.FORBIDDEN,
+};
 
 export interface ApiErrorBody {
   error: { code: string; message: string; requestId: string; details?: unknown };
@@ -29,7 +37,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
     let message = 'An unexpected error occurred';
     let details: unknown;
 
-    if (exception instanceof HttpException) {
+    if (exception instanceof DomainError) {
+      status = DOMAIN_STATUS[exception.kind];
+      code = exception.code;
+      message = exception.message;
+      details = exception.details;
+    } else if (exception instanceof HttpException) {
       status = exception.getStatus();
       code = codeFromStatus(status);
       const body = exception.getResponse();

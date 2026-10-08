@@ -4,10 +4,19 @@ import { and, asc, eq, exists, ilike, isNotNull, isNull, lt, or, type SQL, sql }
 import type { AuthContext } from '../auth/auth-context';
 import { decodeTimeCursor, encodeTimeCursor } from '../common/cursor';
 import { DB } from '../infra/tokens';
-import { LeadIngestionService } from './lead-ingestion.service';
 import { leadNotFound, LeadReader } from './lead-reader.service';
 import type { CreateLeadInput, ListLeadsQuery, UpdateLeadInput } from './leads.schemas';
-import { escapeLike, normalizeEmail } from './normalize';
+import {
+  escapeLike,
+  findDuplicate,
+  ingestLead,
+  normalizeEmail,
+  normalizePhoneOrThrow,
+  resolveOwner,
+  resolveSource,
+  resolveStage,
+  setLeadTags,
+} from '@leadora/domain';
 
 const TEXT_FIELDS = ['fullName', 'companyName', 'jobTitle', 'location', 'country', 'industry', 'currency', 'notes'] as const;
 
@@ -15,7 +24,6 @@ const TEXT_FIELDS = ['fullName', 'companyName', 'jobTitle', 'location', 'country
 export class LeadsService {
   constructor(
     @Inject(DB) private readonly handle: DbHandle,
-    private readonly ingestion: LeadIngestionService,
     private readonly reader: LeadReader,
   ) {}
 
@@ -82,9 +90,9 @@ export class LeadsService {
       };
 
       if (input.email !== undefined) set('email', current.email, normalizeEmail(input.email));
-      if (input.phone !== undefined) set('phone', current.phone, await this.ingestion.normalizePhoneOrThrow(tx, auth.organizationId, input.phone));
+      if (input.phone !== undefined) set('phone', current.phone, await normalizePhoneOrThrow(tx, auth.organizationId, input.phone));
       if (patch.email !== undefined || patch.phone !== undefined) {
-        const dup = await this.ingestion.findDuplicate(tx, auth.organizationId, patch.email ?? null, patch.phone ?? null, id);
+        const dup = await findDuplicate(tx, auth.organizationId, patch.email ?? null, patch.phone ?? null, id);
         if (dup) {
           throw new ConflictException({
             code: 'LEAD_DUPLICATE',
@@ -106,7 +114,7 @@ export class LeadsService {
         }
       }
       if (input.sourceId !== undefined && input.sourceId !== current.sourceId) {
-        set('sourceId', current.sourceId, await this.ingestion.resolveSource(tx, auth.organizationId, input.sourceId, 'MANUAL'));
+        set('sourceId', current.sourceId, await resolveSource(tx, auth.organizationId, input.sourceId, 'MANUAL'));
       }
 
       const activityRows: { type: string; payload: Record<string, unknown> }[] = [];
@@ -115,13 +123,13 @@ export class LeadsService {
         if (!auth.permissions.has('lead.assign')) {
           throw new ForbiddenException({ code: 'FORBIDDEN', message: 'You do not have permission to reassign leads' });
         }
-        patch.ownerUserId = await this.ingestion.resolveOwner(tx, auth.organizationId, input.ownerUserId);
+        patch.ownerUserId = await resolveOwner(tx, auth.organizationId, input.ownerUserId);
         activityRows.push({ type: 'lead.assigned', payload: { from: current.ownerUserId, to: patch.ownerUserId } });
       }
 
       if (input.stageId !== undefined && input.stageId !== current.stageId) {
         const [from] = await tx.select({ key: pipelineStages.key }).from(pipelineStages).where(eq(pipelineStages.id, current.stageId));
-        const stage = await this.ingestion.resolveStage(tx, auth.organizationId, input.stageId, current.pipelineId);
+        const stage = await resolveStage(tx, auth.organizationId, input.stageId, current.pipelineId);
         patch.stageId = stage.id;
         patch.convertedAt = stage.outcome === 'WON' ? new Date() : null;
         patch.lostAt = stage.outcome === 'LOST' ? new Date() : null;
@@ -130,7 +138,7 @@ export class LeadsService {
 
       if (input.tags !== undefined) {
         const before = await this.tagNames(tx, id);
-        await this.ingestion.setTags(tx, auth.organizationId, id, input.tags);
+        await setLeadTags(tx, auth.organizationId, id, input.tags);
         const after = await this.tagNames(tx, id);
         if (before.join('\u0000').toLowerCase() !== after.join('\u0000').toLowerCase()) changes.tags = { from: before, to: after };
       }
@@ -177,7 +185,7 @@ export class LeadsService {
       throw new ForbiddenException({ code: 'FORBIDDEN', message: 'You can only create leads owned by yourself' });
     }
     return this.handle.db.transaction(async (tx) => {
-      const result = await this.ingestion.ingest(
+      const result = await ingestLead(
         tx,
         { organizationId: auth.organizationId, actorUserId: auth.userId, sourceType: 'MANUAL' },
         input,
