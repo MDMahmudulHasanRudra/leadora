@@ -8,7 +8,8 @@ export type NotificationType =
   | 'mention'
   | 'ai_action_required'
   | 'import_completed'
-  | 'automation_failed';
+  | 'automation_failed'
+  | 'automation';
 
 export interface NewNotification {
   organizationId: string;

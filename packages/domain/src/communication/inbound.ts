@@ -6,6 +6,7 @@ import { normalizeEmail } from '../leads/normalize';
 import { notify } from '../notifications';
 import { createLeadSchema } from '../leads/schemas';
 import { rescoreLeads } from '../scoring/rescore';
+import { emitEvent } from '../automation/events';
 
 /** Generic inbound email webhook payload (what a mail relay posts to /webhooks/inbound/:inboxId). */
 export const inboundEmailSchema = z.object({
@@ -141,6 +142,12 @@ export async function processInboundEvent(db: Database, eventId: string): Promis
       });
     }
     await rescoreLeads(tx, organizationId, [lead.id]);
+    await emitEvent(tx, {
+      organizationId,
+      type: 'message.received',
+      leadId: lead.id,
+      payload: { channel: inbox.channel, conversationId: conversation!.id, messageId: message!.id, text: mail.text.slice(0, 2000) },
+    });
     await markProcessed();
     return {
       status: 'PROCESSED',

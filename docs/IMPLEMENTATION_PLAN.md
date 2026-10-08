@@ -117,6 +117,29 @@ Follow-ups noted, not done:
 - Uploaded CSV content is stored in Postgres (≤ 5 MB); move it to object storage when the storage provider lands, and purge it after the import finishes.
 - Import retries are safe, but the stale-job case (worker killed mid-row with no retry left) leaves status `PROCESSING`; a periodic sweeper should mark old ones `FAILED`.
 
+## Phase 6 — Automation
+
+Slices: (1) event outbox · (2) rules, conditions, dispatcher, runs, DB actions · (3) AI and email actions · (4) time-based triggers · (5) automation UI.
+
+### Decisions
+
+- **Transactional outbox** (`domain_events`): business code records an event in the *same transaction* as the change, so an event exists if and only if the change committed. This replaces "publish after commit" for automations, and later for notifications. The worker claims events in batches with `FOR UPDATE SKIP LOCKED`, so several worker instances never take the same event.
+- **Triggers** (spec §40): `lead.created`, `lead.stage_changed`, `lead.score_changed`, `message.received`, `followup.overdue` (minute sweep, once per follow-up) and `lead.inactive` (hourly sweep, once per inactivity period).
+- **Rules** are versioned (`automation_rules.version` bumps on every edit). A run stores the rule snapshot it executed (spec §41: "rule version"). Conditions are a flat AND-list of `{field, op, value}` over lead and event facts, evaluated by a pure function at dispatch time, so runs exist only for matching events and the log stays meaningful.
+- **No duplicate execution:** each run has an idempotency key (`rule:event`, or `rule:lead:period` for sweeps) with a unique constraint, so a re-dispatched event creates nothing. Each action step commits in the same transaction as its effect, so a retry resumes after the last completed step and never repeats one. Runs retry 3 times (1m/5m/15m) and then stay FAILED with the error on the step.
+- **Loop guard:** events caused by an automation carry `automationDepth`; the dispatcher ignores events at depth ≥ 3, and a rule never triggers on an event its own run caused.
+- **Actions:** assign (user or assignment rules), change stage, change priority, add tag, create follow-up, notify (owner, managers or a user), send email (queued like any message), run AI lead analysis, draft an AI reply (saved as an internal note for a human; never auto-sent — auto-reply needs the spec §81 safety policy and `ENABLE_AI_AUTO_REPLY`).
+- **Gating:** `ENABLE_AUTOMATION` (installation) plus `automation.view` / `automation.manage`. Rule changes are audit-logged.
+
+### Threat model additions
+
+| Threat | Abuse case | Mitigation | Test |
+| --- | --- | --- | --- |
+| DoS | Rules trigger each other forever | depth limit + own-cause exclusion | stage-change loop stops |
+| Tampering | Duplicate delivery of an event runs actions twice | unique idempotency key + per-step commits | dispatch and run twice → one effect |
+| Elevation | Agent creates a rule that reassigns leads or emails customers | `automation.manage` (admins/managers) required; actions run as the organization and are audit-visible in run logs | agent → 403 |
+| Info disclosure | Notification templates leak data across orgs | every action is scoped to the run's organization; targets validated against that org | — |
+
 ## Phase 5 — Knowledge base (RAG)
 
 Slices: (1) storage + sources + indexing pipeline ✅ · (2) permission-aware retrieval + cited answers ✅ · (3) knowledge base UI ✅ · (4) grounded reply drafts ✅.

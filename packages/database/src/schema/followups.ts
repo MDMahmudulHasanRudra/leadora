@@ -31,6 +31,8 @@ export const followups = pgTable(
     completedAt: timestamp(ms),
     // Set when the due reminder has been sent, so the scheduler notifies once.
     remindedAt: timestamp(ms),
+    // Set when the followup.overdue automation event was emitted, so it fires once per follow-up.
+    overdueEventAt: timestamp(ms),
     createdAt: timestamp(ms).notNull().defaultNow(),
     updatedAt: timestamp(ms)
       .notNull()

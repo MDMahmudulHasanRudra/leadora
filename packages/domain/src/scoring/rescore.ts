@@ -1,8 +1,9 @@
 import { type Database, followups, leads, scoringSettings } from '@leadora/database';
 import { and, asc, eq, gt, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
+import { emitEvent } from '../automation/events';
 import { combineScore, computeRuleScore, type LeadFacts, resolveScoringConfig, type ScoringConfig, temperatureFor } from './rules';
 
-type Db = Pick<Database, 'select' | 'selectDistinct' | 'update' | 'execute'>;
+type Db = Pick<Database, 'select' | 'selectDistinct' | 'update' | 'insert' | 'execute'>;
 
 const BATCH = 500;
 
@@ -80,6 +81,15 @@ async function scoreBatch(db: Db, organizationId: string, config: ScoringConfig,
         scoredAt: new Date(),
       })
       .where(eq(leads.id, lead.id));
+    // A brand-new lead getting its first score is lead.created, not a change.
+    if (lead.score !== null && lead.score !== score) {
+      await emitEvent(db, {
+        organizationId,
+        type: 'lead.score_changed',
+        leadId: lead.id,
+        payload: { from: lead.score, to: score, temperatureFrom: lead.temperature, temperatureTo: temperature },
+      });
+    }
     changed++;
   }
   return changed;

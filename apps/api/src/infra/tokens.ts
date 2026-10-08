@@ -9,3 +9,4 @@ export const AI_PROVIDER_FACTORY = Symbol('AI_PROVIDER_FACTORY');
 export const EMBEDDINGS_QUEUE = Symbol('EMBEDDINGS_QUEUE');
 /** StorageProvider for uploads (local disk or S3-compatible). */
 export const STORAGE = Symbol('STORAGE');
+export const AUTOMATIONS_QUEUE = Symbol('AUTOMATIONS_QUEUE');

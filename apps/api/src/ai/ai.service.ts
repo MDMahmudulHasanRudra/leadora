@@ -1,34 +1,21 @@
 import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { type AiProvider, AiProviderError } from '@leadora/ai';
 import type { Env } from '@leadora/config';
-import {
-  activities,
-  aiAnalyses,
-  aiPromptVersions,
-  aiRuns,
-  aiSettings,
-  conversations,
-  type DbHandle,
-  leads,
-  messages,
-  users,
-} from '@leadora/database';
+import { aiAnalyses, aiPromptVersions, aiRuns, aiSettings, type DbHandle, users } from '@leadora/database';
 import {
   type AiDeps,
+  analyzeLeadWithAi,
   BUILTIN_PROMPTS,
-  dataBlock,
   decryptSecret,
   encryptSecret,
   estimateCostUsd,
   monthToDateSpendUsd,
-  rescoreLeads,
-  runStructured,
 } from '@leadora/domain';
-import { and, asc, desc, eq, gte, inArray, max, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, max, sql } from 'drizzle-orm';
 import type { AuthContext } from '../auth/auth-context';
 import { AI_PROVIDER_FACTORY, DB, ENV } from '../infra/tokens';
 import { LeadReader } from '../leads/lead-reader.service';
-import { DEFAULT_FEATURES, leadAnalysisSchema, type PromptVersionInput, type UpdateSettingsInput } from './ai.schemas';
+import { DEFAULT_FEATURES, type PromptVersionInput, type UpdateSettingsInput } from './ai.schemas';
 
 type ProviderFactory = (provider: string, apiKey: string) => AiProvider;
 
@@ -121,97 +108,9 @@ export class AiService {
     }
   }
 
-  /** Builds the analysis input from CRM data, every untrusted part wrapped as data (spec §56). */
-  private async leadInput(auth: AuthContext, leadId: string) {
-    const lead = await this.reader.get(auth.organizationId, leadId);
-    const recent = await this.handle.db
-      .select({ type: activities.type, payload: activities.payload, createdAt: activities.createdAt })
-      .from(activities)
-      .where(and(eq(activities.organizationId, auth.organizationId), eq(activities.leadId, leadId)))
-      .orderBy(desc(activities.seq))
-      .limit(20);
-    const convIds = (
-      await this.handle.db.select({ id: conversations.id }).from(conversations).where(eq(conversations.leadId, leadId))
-    ).map((c) => c.id);
-    const msgs = convIds.length
-      ? await this.handle.db
-          .select({ direction: messages.direction, content: messages.content, createdAt: messages.createdAt })
-          .from(messages)
-          .where(and(inArray(messages.conversationId, convIds), sql`${messages.direction} <> 'INTERNAL'`))
-          .orderBy(desc(messages.seq))
-          .limit(10)
-      : [];
-
-    const profile = {
-      name: lead.fullName,
-      company: lead.companyName,
-      jobTitle: lead.jobTitle,
-      location: lead.location,
-      industry: lead.industry,
-      budget: lead.budget,
-      currency: lead.currency,
-      priority: lead.priority,
-      stage: lead.stage.name,
-      source: lead.source.name,
-      tags: lead.tags,
-      customFields: lead.customFields,
-      notes: lead.notes,
-      createdAt: lead.createdAt,
-      lastContactedAt: lead.lastContactedAt,
-    };
-    const timeline = recent
-      .reverse()
-      .map((a) => `${a.createdAt.toISOString()} ${a.type}${a.type === 'note.added' ? `: ${String((a.payload as { body?: unknown } | null)?.body ?? '')}` : ''}`)
-      .join('\n');
-    const thread = msgs
-      .reverse()
-      .map((m) => `${m.createdAt.toISOString()} ${m.direction === 'INBOUND' ? 'CUSTOMER' : 'US'}: ${m.content.slice(0, 1000)}`)
-      .join('\n');
-
-    return {
-      lead,
-      input: [
-        `Today is ${new Date().toISOString().slice(0, 10)}. Analyse this lead.`,
-        dataBlock('lead', JSON.stringify(profile, null, 2)),
-        dataBlock('timeline', timeline || '(no activity yet)'),
-        dataBlock('messages', thread || '(no messages yet)'),
-      ].join('\n\n'),
-    };
-  }
-
   async analyzeLead(auth: AuthContext, leadId: string) {
-    const { lead, input } = await this.leadInput(auth, leadId);
-    if (lead.archivedAt) throw new ConflictException({ code: 'LEAD_ARCHIVED', message: 'Restore this lead first' });
-    const { data, runId } = await runStructured(
-      this.handle.db,
-      this.deps(),
-      { organizationId: auth.organizationId, userId: auth.userId },
-      { purpose: 'lead_analysis', promptKey: 'lead_analysis', schema: leadAnalysisSchema, input, entity: { type: 'lead', id: leadId } },
-    );
-    await this.handle.db.transaction(async (tx) => {
-      await tx.insert(aiAnalyses).values({ organizationId: auth.organizationId, entityType: 'lead', entityId: leadId, purpose: 'lead_analysis', runId, result: data });
-      // The AI score is one input to the hybrid score (spec §14), never the score itself.
-      await tx.update(leads).set({ aiScore: data.score }).where(eq(leads.id, leadId));
-      await rescoreLeads(tx, auth.organizationId, [leadId]);
-      const [after] = await tx.select({ score: leads.score, temperature: leads.temperature }).from(leads).where(eq(leads.id, leadId));
-      await tx.insert(activities).values({
-        organizationId: auth.organizationId,
-        leadId,
-        actorUserId: auth.userId,
-        type: 'ai.analysis_completed',
-        payload: {
-          score: data.score,
-          leadScore: after!.score,
-          previousScore: lead.score,
-          temperature: after!.temperature,
-          intent: data.intent,
-          recommendedAction: data.recommendedAction,
-        },
-      });
-    });
-    return data;
+    return analyzeLeadWithAi(this.handle.db, this.deps(), { organizationId: auth.organizationId, userId: auth.userId }, leadId);
   }
-
   async latestAnalysis(auth: AuthContext, leadId: string) {
     await this.reader.get(auth.organizationId, leadId);
     const [row] = await this.handle.db

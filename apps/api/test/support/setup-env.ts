@@ -13,6 +13,7 @@ Object.assign(process.env, {
   SMTP_URL: '',
   ENABLE_AI: 'true',
   ENABLE_KNOWLEDGE_BASE: 'true',
+  ENABLE_AUTOMATION: 'true',
   STORAGE_DRIVER: 'local',
   STORAGE_LOCAL_DIR: path.join(tmpdir(), 'leadora-test-uploads'),
   KB_MAX_FILE_MB: '1',

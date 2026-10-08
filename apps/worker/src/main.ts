@@ -6,15 +6,22 @@ import { OpenAiProvider } from '@leadora/ai';
 import { createDb } from '@leadora/database';
 import {
   type ChannelProviders,
+  automationRunJob,
   deliverMessage,
+  dispatchEvents,
+  dispatchInactiveLeads,
+  emitOverdueFollowupEvents,
+  executeRun,
   indexDocument,
   markLeadImportFailed,
   processInboundEvent,
   processLeadImport,
+  purgeProcessedEvents,
   REALTIME_CHANNEL,
   organizationsNeedingRescore,
   rescoreOrganization,
   sendFollowupReminders,
+  staleQueuedRuns,
 } from '@leadora/domain';
 import { createStorage } from '@leadora/storage';
 import Redis from 'ioredis';
@@ -41,6 +48,24 @@ const aiDeps = {
     throw new Error(`Unsupported AI provider ${provider}`);
   },
 };
+const automationsQueue = new Queue('automations', { connection });
+const messagesQueue = new Queue('messages', { connection });
+const enqueueRun = async (runId: string) => {
+  const job = automationRunJob(runId);
+  await automationsQueue.add(job.name, job.data, job.opts);
+};
+const automationDeps = {
+  ai: aiDeps,
+  // Same job shape as a human reply, so automated emails get the same retries and threading.
+  enqueueMessage: async (messageId: string) => {
+    await messagesQueue.add('message.send', { messageId }, { jobId: messageId, attempts: 4, backoff: { type: 'custom' } });
+  },
+  knowledgeEnabled: env.ENABLE_KNOWLEDGE_BASE,
+};
+const isFinal = (job: Job) => job.attemptsMade + 1 >= (job.opts.attempts ?? 1);
+// Frequent housekeeping jobs log only when they fail.
+const QUIET_JOBS = new Set(['events.dispatch', 'automations.sweep']);
+
 const publish = async (organizationId: string, type: string, data: Record<string, unknown>, userId?: string) => {
   await publisher.publish(REALTIME_CHANNEL, JSON.stringify({ organizationId, type, data, ...(userId ? { userId } : {}) })).catch(() => undefined);
 };
@@ -64,8 +89,20 @@ const handlers: Partial<Record<QueueName, Record<string, (job: Job) => Promise<u
     },
   },
   embeddings: {
-    'kb.index': (job) =>
-      indexDocument(db, { ai: aiDeps, storage }, job.data.documentId, { finalAttempt: job.attemptsMade + 1 >= (job.opts.attempts ?? 1) }),
+    'kb.index': (job) => indexDocument(db, { ai: aiDeps, storage }, job.data.documentId, { finalAttempt: isFinal(job) }),
+  },
+  automations: {
+    // Spec §40-41: outbox → rules → runs. Runs on every instance; SKIP LOCKED keeps them from sharing events.
+    'events.dispatch': () => dispatchEvents(db, { enqueueRun, rulesEnabled: env.ENABLE_AUTOMATION }),
+    'automation.run': (job) => executeRun(db, automationDeps, job.data.runId, { finalAttempt: isFinal(job) }),
+    'automations.sweep': async () => {
+      const overdue = await emitOverdueFollowupEvents(db);
+      const stale = await staleQueuedRuns(db);
+      for (const id of stale) await enqueueRun(id);
+      return { overdue, requeued: stale.length };
+    },
+    'automations.inactive': async () => ({ runs: env.ENABLE_AUTOMATION ? (await dispatchInactiveLeads(db, { enqueueRun })).length : 0 }),
+    'events.purge': async () => ({ purged: await purgeProcessedEvents(db) }),
   },
   imports: {
     'lead.import': (job) =>
@@ -90,7 +127,9 @@ const workers = (Object.keys(QUEUES) as QueueName[]).map((name) => {
       settings: { backoffStrategy: (attemptsMade: number) => retryDelay(attemptsMade) },
     },
   );
-  worker.on('completed', (job) => log.info({ queue: name, jobId: job.id, job: job.name }, 'job.completed'));
+  worker.on('completed', (job) => {
+    if (!QUIET_JOBS.has(job.name)) log.info({ queue: name, jobId: job.id, job: job.name }, 'job.completed');
+  });
   worker.on('failed', (job, err) =>
     log.error({ queue: name, jobId: job?.id, job: job?.name, attempts: job?.attemptsMade, err: err.message }, 'job.failed'),
   );
@@ -100,9 +139,13 @@ const workers = (Object.keys(QUEUES) as QueueName[]).map((name) => {
 
 // Every worker instance upserts the same scheduler id, so the job exists once cluster-wide.
 const scheduler = new Queue('default', { connection });
-void scheduler
-  .upsertJobScheduler('followup-reminders', { every: 60_000 }, { name: 'followups.remind' })
-  .catch((err: Error) => log.error({ err: err.message }, 'scheduler.failed'));
+void Promise.all([
+  scheduler.upsertJobScheduler('followup-reminders', { every: 60_000 }, { name: 'followups.remind' }),
+  automationsQueue.upsertJobScheduler('events-dispatch', { every: 2_000 }, { name: 'events.dispatch' }),
+  automationsQueue.upsertJobScheduler('automations-sweep', { every: 60_000 }, { name: 'automations.sweep' }),
+  automationsQueue.upsertJobScheduler('automations-inactive', { every: 3_600_000 }, { name: 'automations.inactive' }),
+  automationsQueue.upsertJobScheduler('events-purge', { every: 86_400_000 }, { name: 'events.purge' }),
+]).catch((err: Error) => log.error({ err: err.message }, 'scheduler.failed'));
 
 // Leads that predate scoring (or a failed rescore) have no scored_at; queue their orgs once on boot.
 // The jobId dedupes across worker instances.
@@ -137,7 +180,7 @@ async function shutdown(signal: string) {
   shuttingDown = true;
   log.info({ signal }, 'worker.stopping');
   server.close();
-  await Promise.allSettled([...workers.map((w) => w.close()), scheduler.close()]);
+  await Promise.allSettled([...workers.map((w) => w.close()), scheduler.close(), automationsQueue.close(), messagesQueue.close()]);
   await pool.end();
   email?.close();
   publisher.disconnect();

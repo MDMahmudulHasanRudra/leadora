@@ -20,6 +20,7 @@ import {
   pickOwnerByRules,
   resolveOwner,
   resolveSource,
+  emitEvent,
   rescoreLeads,
   resolveStage,
   setLeadTags,
@@ -125,6 +126,7 @@ export class LeadsService {
       }
 
       const activityRows: { type: string; payload: Record<string, unknown> }[] = [];
+      let stageChange: { from: string; to: string; outcome: string } | null = null;
 
       if (input.ownerUserId !== undefined && input.ownerUserId !== current.ownerUserId) {
         if (!auth.permissions.has('lead.assign')) {
@@ -141,6 +143,7 @@ export class LeadsService {
         patch.convertedAt = stage.outcome === 'WON' ? new Date() : null;
         patch.lostAt = stage.outcome === 'LOST' ? new Date() : null;
         activityRows.push({ type: 'lead.stage_changed', payload: { from: from!.key, to: stage.key } });
+        stageChange = { from: from!.key, to: stage.key, outcome: stage.outcome };
       }
 
       if (input.tags !== undefined) {
@@ -179,6 +182,9 @@ export class LeadsService {
         });
       }
       if (Object.keys(changes).length) await rescoreLeads(tx, auth.organizationId, [id]);
+      if (stageChange) {
+        await emitEvent(tx, { organizationId: auth.organizationId, type: 'lead.stage_changed', leadId: id, actorUserId: auth.userId, payload: stageChange });
+      }
       return this.reader.get(auth.organizationId, id, tx);
     });
   }

@@ -18,3 +18,4 @@ export * from './notifications';
 export * from './ai';
 export * from './scoring';
 export * from './knowledge';
+export * from './automation';

@@ -1,4 +1,8 @@
+import { LEAD_ACTIONS } from '@leadora/domain';
 import { z } from 'zod';
+
+// Lead analysis and reply drafting live in @leadora/domain so automations can run them in the worker.
+export { type LeadAnalysis, leadAnalysisSchema, type ReplyRequest, replyRequestSchema } from '@leadora/domain';
 
 const PROFILES = ['fast', 'balanced', 'reasoning', 'embedding'] as const;
 
@@ -42,26 +46,6 @@ export const promptVersionSchema = z.object({
 });
 export type PromptVersionInput = z.infer<typeof promptVersionSchema>;
 
-/** Spec §30/§31: every machine-consumed AI result has a schema. Strict objects → strict JSON schema. */
-export const leadAnalysisSchema = z.strictObject({
-  summary: z.string().max(600),
-  intent: z.enum(['PURCHASE', 'INQUIRY', 'SUPPORT', 'COMPLAINT', 'PARTNERSHIP', 'SPAM', 'UNKNOWN']),
-  buyingSignal: z.enum(['NONE', 'WEAK', 'MODERATE', 'STRONG']),
-  urgency: z.enum(['LOW', 'MEDIUM', 'HIGH']),
-  score: z.number().int().min(0).max(100),
-  objections: z.array(z.string().max(120)).max(10),
-  productInterest: z.array(z.string().max(120)).max(10),
-  recommendedAction: z.enum(['CALL_NOW', 'SEND_PRICING', 'OFFER_DEMO', 'FOLLOW_UP_LATER', 'NURTURE', 'ESCALATE_TO_MANAGER', 'DISQUALIFY']),
-  rationale: z.string().max(400),
-  // A concrete follow-up the salesperson can schedule with one click (spec §108 "next action").
-  nextAction: z.strictObject({
-    type: z.enum(['CALL', 'EMAIL', 'MESSAGE', 'MEETING', 'NONE']),
-    inHours: z.number().int().min(0).max(720),
-    note: z.string().max(300),
-  }),
-});
-export type LeadAnalysis = z.infer<typeof leadAnalysisSchema>;
-
 export const DEFAULT_FEATURES = {
   leadAnalysis: true,
   conversationAnalysis: true,
@@ -71,7 +55,6 @@ export const DEFAULT_FEATURES = {
   autoReply: false,
 };
 
-const ACTIONS = ['CALL_NOW', 'SEND_PRICING', 'OFFER_DEMO', 'FOLLOW_UP_LATER', 'NURTURE', 'ESCALATE_TO_MANAGER', 'DISQUALIFY'] as const;
 const short = z.string().max(160);
 
 /** Spec §31. */
@@ -86,26 +69,7 @@ export const conversationAnalysisSchema = z.strictObject({
   questions: z.array(short).max(10),
   competitorMentions: z.array(short).max(10),
   riskFlags: z.array(short).max(10),
-  recommendedNextAction: z.enum(ACTIONS),
+  recommendedNextAction: z.enum(LEAD_ACTIONS),
   score: z.number().int().min(0).max(100),
 });
 export type ConversationAnalysis = z.infer<typeof conversationAnalysisSchema>;
-
-/** Spec §32: suggest, rewrite and translate. The agent always reviews and sends. */
-export const replyRequestSchema = z
-  .object({
-    mode: z.enum(['suggest', 'rewrite', 'translate']),
-    draft: z.string().trim().max(20_000).optional(),
-    language: z.enum(['en', 'bn']).default('en'),
-    tone: z.enum(['friendly', 'formal', 'concise']).default('friendly'),
-  })
-  .refine((v) => v.mode === 'suggest' || !!v.draft, { path: ['draft'], message: 'Write a draft first' });
-export type ReplyRequest = z.infer<typeof replyRequestSchema>;
-
-export const replySchema = z.strictObject({
-  reply: z.string().max(4000),
-  language: z.enum(['en', 'bn']),
-  notes: z.string().max(400),
-  // Ids of knowledge-base sources (S1, S2…) the reply relies on; empty when none were given or used.
-  citations: z.array(z.string().max(5)).max(8),
-});
