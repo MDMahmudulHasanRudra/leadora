@@ -57,6 +57,9 @@ importers:
       '@node-rs/argon2':
         specifier: ^2.2.2
         version: 2.2.2
+      bullmq:
+        specifier: ^6.3.11
+        version: 6.3.11(ioredis@6.0.0)(pg@8.23.1)
       cookie-parser:
         specifier: ^1.4.7
         version: 1.4.7
@@ -152,6 +155,12 @@ importers:
       '@leadora/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@leadora/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+      '@leadora/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       bullmq:
         specifier: ^6.3.11
         version: 6.3.11(ioredis@6.0.0)(pg@8.23.1)
@@ -189,6 +198,9 @@ importers:
       '@leadora/database':
         specifier: workspace:*
         version: link:../database
+      csv-parse:
+        specifier: ^7.0.3
+        version: 7.0.3
       drizzle-orm:
         specifier: ^0.45.3
         version: 0.45.3(@types/pg@8.23.1)(pg@8.23.1)
@@ -1811,6 +1823,9 @@ packages:
 
   csstype@3.2.3:
     resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
+
+  csv-parse@7.0.3:
+    resolution: {integrity: sha512-YFd3QM/yo17vH91L1IOZuvl09zM0zEEtdfTcOCKWcMdM++MNaQSyp09slXyFCLaPXvHstQFx/xC8myiFHSMUvw==}
 
   debug@4.4.3:
     resolution: {integrity: sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA==}
@@ -4250,6 +4265,8 @@ snapshots:
       which: 2.0.2
 
   csstype@3.2.3: {}
+
+  csv-parse@7.0.3: {}
 
   debug@4.4.3:
     dependencies:

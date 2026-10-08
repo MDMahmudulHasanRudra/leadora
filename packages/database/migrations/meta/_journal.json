@@ -50,6 +50,13 @@
       "when": 1791431209630,
       "tag": "0006_activities_seq",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791436747336,
+      "tag": "0007_lead_imports",
+      "breakpoints": true
     }
   ]
 }

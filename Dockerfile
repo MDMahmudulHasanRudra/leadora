@@ -15,6 +15,7 @@ COPY apps/worker/package.json apps/worker/
 COPY apps/web/package.json apps/web/
 COPY packages/config/package.json packages/config/
 COPY packages/database/package.json packages/database/
+COPY packages/domain/package.json packages/domain/
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store \
     pnpm install --frozen-lockfile --store-dir /pnpm-store
 

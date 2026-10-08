@@ -2,10 +2,14 @@ import http from 'node:http';
 import { Worker, type Job } from 'bullmq';
 import pino from 'pino';
 import { baseLoggerOptions, loadEnv } from '@leadora/config';
+import { createDb } from '@leadora/database';
+import { markLeadImportFailed, processLeadImport } from '@leadora/domain';
+import { handleLeadImport } from './handlers/lead-import';
 import { QUEUES, retryDelay, type QueueName } from './queues';
 
 const env = loadEnv();
 const log = pino(baseLoggerOptions('worker', env.LOG_LEVEL));
+const { db, pool } = createDb(env.DATABASE_URL);
 
 const connection = { url: env.VALKEY_URL, maxRetriesPerRequest: null };
 
@@ -13,6 +17,13 @@ const connection = { url: env.VALKEY_URL, maxRetriesPerRequest: null };
 const handlers: Partial<Record<QueueName, Record<string, (job: Job) => Promise<unknown>>>> = {
   default: {
     'system.ping': async (job) => ({ pong: true, at: new Date().toISOString(), id: job.id }),
+  },
+  imports: {
+    'lead.import': (job) =>
+      handleLeadImport(
+        { process: (id) => processLeadImport(db, id), markFailed: (id, msg) => markLeadImportFailed(db, id, msg) },
+        job,
+      ),
   },
 };
 
@@ -64,6 +75,7 @@ async function shutdown(signal: string) {
   log.info({ signal }, 'worker.stopping');
   server.close();
   await Promise.allSettled(workers.map((w) => w.close()));
+  await pool.end();
   log.info('worker.stopped');
   process.exit(0);
 }

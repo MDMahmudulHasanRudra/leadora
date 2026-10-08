@@ -95,6 +95,11 @@ Follow-ups noted, not done:
 | Tampering | Moving a lead to a stage of another pipeline | stage must belong to the lead's pipeline | 422 |
 | DoS | Huge search strings or page sizes | `q` ≤ 100 chars, `limit` ≤ 100 | 422 |
 | Injection | Search text with SQL wildcards or quotes | parameterized `ILIKE` with `%`/`_` escaped | search for `%` matches literally |
+| DoS | Huge CSV or row flood | ≤ 5 MB per file, ≤ 20,000 rows, ≤ 100 columns, checked on upload | 6 MB → 413 |
+| Tampering | Malformed CSV (bad quotes, binary data) | strict parser; upload rejected with `INVALID_CSV` | garbage → 422 |
+| Integrity | Worker crash mid-import re-imports rows | each row and its progress checkpoint commit in one transaction; retries resume from the checkpoint | process twice → same counts |
+| Injection | Spreadsheet formula in the error report (`=HYPERLINK(…)`) | cells starting `= + - @` are prefixed with `'` | report cell escaped |
+| Elevation | Import as another tenant or with a foreign owner | import rows bound to the uploader's organization; owner validated in the same org | cross-org → 404 / 422 |
 
 ### Slices
 
@@ -103,7 +108,7 @@ Follow-ups noted, not done:
 3. List leads: filters (stage, owner incl. `me`/`unassigned`, source, tag, temperature, search) + cursor pagination
 4. Update lead: fields, stage, owner, tags; archive; activities for each change
 5. Web: leads list with filters, create form, lead detail with timeline
-6. CSV import (async via worker) with per-row report
+6. CSV import with a per-row report: upload → column mapping → queued job → worker runs `processLeadImport` from `@leadora/domain`, row by row through `ingestLead`
 7. Custom fields
 
 ## Phase 1 / Sprint 4 — Pipeline, assignment, follow-ups
