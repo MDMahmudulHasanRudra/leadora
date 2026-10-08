@@ -13,7 +13,8 @@ import { type Activity, type CustomFieldDef, FOLLOWUP_TYPES, type Followup, type
 import { NewTaskForm } from '../../tasks/new-task-form';
 import { LeadForm } from '../lead-form';
 import { PriorityBadge, StageBadge } from '../lead-bits';
-import { ACTION_LABELS, LeadAiPanel } from './lead-ai-panel';
+import { ACTION_LABELS } from '@/lib/ai';
+import { LeadAiPanel } from './lead-ai-panel';
 
 type Person = { id: string; fullName: string; active: boolean };
 
@@ -125,6 +126,8 @@ export function LeadDetail({ lead, activities, followups, tasks, customFields, s
         return p.mergedContact ? 'converted it, merging into an existing contact' : 'converted it to a contact';
       case 'note.added':
         return 'added a note';
+      case 'ai.conversation_analyzed':
+        return `ran an AI analysis of a conversation: AI score ${p.score}, ${String(p.sentiment ?? '').toLowerCase()} sentiment`;
       case 'ai.analysis_completed':
         return `ran an AI analysis: AI score ${p.score}${p.recommendedAction ? `, suggested “${ACTION_LABELS[String(p.recommendedAction)] ?? p.recommendedAction}”` : ''}`;
       case 'followup.created':

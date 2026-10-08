@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { apiGet, getIdentity, requireData } from '@/lib/api-server';
-import type { Page, UserRow } from '@/lib/types';
+import type { ConversationAnalysis, Page, UserRow } from '@/lib/types';
 import { InboxView, type ConversationItem, type MessageItem } from './inbox-view';
 
 export const dynamic = 'force-dynamic';
@@ -23,13 +23,17 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
 
   let selected: ConversationItem | null = null;
   let messages: MessageItem[] = [];
+  let analysis: { result: ConversationAnalysis; createdAt: string } | null = null;
   if (sp.c && /^[0-9a-f-]{36}$/.test(sp.c)) {
-    const [conv, msgs] = await Promise.all([
+    const [conv, msgs, ai] = await Promise.all([
       apiGet<ConversationItem>(`/conversations/${sp.c}`),
       apiGet<Page<MessageItem>>(`/conversations/${sp.c}/messages`),
+      // 404 just means not analysed yet.
+      apiGet<{ result: ConversationAnalysis; createdAt: string }>(`/ai/conversations/${sp.c}/analysis`),
     ]);
     selected = conv.data;
     messages = msgs.data?.items ?? [];
+    analysis = ai.data;
   }
 
   return (
@@ -40,7 +44,8 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
       messages={messages}
       users={users.items.filter((u) => u.status === 'ACTIVE').map(({ id, fullName }) => ({ id, fullName }))}
       timeZone={identity.user.timezone}
-      can={{ reply: can('conversation.reply'), assign: can('conversation.assign') }}
+      can={{ reply: can('conversation.reply'), assign: can('conversation.assign'), ai: can('ai.use'), aiConfigure: can('ai.configure') }}
+      analysis={analysis}
     />
   );
 }

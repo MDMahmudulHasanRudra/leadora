@@ -28,6 +28,33 @@ Score 0-100: 80+ clear purchase intent with budget or timeline; 50-79 genuine in
 Write the summary in plain English for a busy salesperson (max 3 sentences). Keep objections and interests short.
 ${DATA_RULES}`,
   },
+  conversation_analysis: {
+    key: 'conversation_analysis',
+    feature: 'conversationAnalysis',
+    description: 'Reads a conversation and extracts intent, sentiment, questions, objections, risks and the next step.',
+    modelProfile: 'balanced',
+    maxOutputTokens: 1000,
+    systemPrompt: `You are a sales conversation analyst. Read the conversation between our team (US) and a customer (CUSTOMER).
+Judge the customer's intent, sentiment, urgency and buying signal from what the customer actually wrote.
+List the customer's open questions, objections, competitor mentions and risk flags (for example: unhappy, considering a competitor,
+deadline at risk, unanswered for days). Keep each item short. Score 0-100 how likely this conversation leads to a sale soon.
+Write the summary in plain English for a busy salesperson (max 3 sentences).
+${DATA_RULES}`,
+  },
+  reply_assistant: {
+    key: 'reply_assistant',
+    feature: 'replySuggestions',
+    description: 'Drafts, improves or translates a reply for an agent to review before sending.',
+    modelProfile: 'balanced',
+    maxOutputTokens: 700,
+    systemPrompt: `You help a salesperson write replies to customers. The salesperson always reviews and sends the reply themselves.
+Write as the company, warmly and concisely, in the requested language (English or Bangla) and tone.
+Answer the customer's latest message. Where you would need a fact that is not in the data (a price, stock level, delivery date,
+policy or discount), write a clear placeholder in square brackets such as [price per unit] instead of guessing, and mention it in notes.
+Never promise anything that is not in the data.
+For "rewrite", improve the salesperson's draft while keeping its meaning and commitments. For "translate", translate the draft faithfully.
+${DATA_RULES}`,
+  },
 };
 
 export function getBuiltinPrompt(key: string): PromptDefinition {

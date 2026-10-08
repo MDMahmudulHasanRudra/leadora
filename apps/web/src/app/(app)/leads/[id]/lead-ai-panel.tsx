@@ -4,44 +4,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Alert, Badge, Button, Card, formatDateTime } from '@/components/ui';
-import { api, ApiError } from '@/lib/api-client';
+import { ACTION_LABELS, explainAiError, titleCase as title } from '@/lib/ai';
+import { api } from '@/lib/api-client';
 import type { LeadAnalysis } from '@/lib/types';
-
-export const ACTION_LABELS: Record<string, string> = {
-  CALL_NOW: 'Call now',
-  SEND_PRICING: 'Send pricing',
-  OFFER_DEMO: 'Offer a demo',
-  FOLLOW_UP_LATER: 'Follow up later',
-  NURTURE: 'Nurture',
-  ESCALATE_TO_MANAGER: 'Escalate to a manager',
-  DISQUALIFY: 'Disqualify',
-};
-
-const SETTINGS_FIXABLE = new Set(['AI_DISABLED', 'AI_FEATURE_DISABLED', 'AI_NOT_CONFIGURED', 'AI_BUDGET_EXCEEDED']);
-
-const title = (s: string) => s.charAt(0) + s.slice(1).toLowerCase();
-
-/** AI errors the user can act on, in plain words. */
-function explain(err: unknown, canConfigure: boolean): string {
-  if (!(err instanceof ApiError)) return 'The analysis could not be run. Please try again.';
-  const where = canConfigure ? ' in Settings → AI' : '. Ask an admin';
-  switch (err.code) {
-    case 'AI_PLATFORM_DISABLED':
-      return 'AI is switched off for this installation. Your server administrator can enable it (ENABLE_AI).';
-    case 'AI_DISABLED':
-      return `AI is turned off${canConfigure ? '. Turn it on in Settings → AI.' : '. Ask an admin to turn it on.'}`;
-    case 'AI_FEATURE_DISABLED':
-      return `Lead analysis is turned off${where}.`;
-    case 'AI_NOT_CONFIGURED':
-      return canConfigure ? err.message : `${err.message} (ask an admin)`;
-    case 'AI_BUDGET_EXCEEDED':
-      return `This month’s AI budget is used up${where}.`;
-    case 'AI_INVALID_OUTPUT':
-      return 'The AI returned an unusable answer twice, so nothing was changed. Try again.';
-    default:
-      return err.message;
-  }
-}
 
 export function LeadAiPanel({
   leadId,
@@ -70,8 +35,9 @@ export function LeadAiPanel({
       await api(`/ai/leads/${leadId}/analyze`, { method: 'POST' });
       router.refresh();
     } catch (err) {
-      setError(explain(err, canConfigure));
-      setSettingsLink(canConfigure && err instanceof ApiError && SETTINGS_FIXABLE.has(err.code));
+      const e = explainAiError(err, canConfigure, 'Lead analysis');
+      setError(e.message);
+      setSettingsLink(e.settingsLink);
     } finally {
       setBusy(false);
     }

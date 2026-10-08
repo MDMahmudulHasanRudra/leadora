@@ -13,7 +13,12 @@ export const startSchema = z.object({
   subject: z.string().trim().max(300).optional(),
   body: z.string().trim().min(1).max(20_000),
 });
-export const messageSchema = z.object({ body: z.string().trim().min(1).max(20_000), internal: z.boolean().optional() });
+export const messageSchema = z.object({
+  body: z.string().trim().min(1).max(20_000),
+  internal: z.boolean().optional(),
+  // Set when the agent sends an AI-drafted reply, so AI involvement stays visible (spec §32).
+  aiGenerated: z.boolean().optional(),
+});
 export const updateSchema = z
   .object({ status: z.enum(['OPEN', 'PENDING', 'RESOLVED']), assignedUserId: z.uuid().nullable() })
   .partial()
@@ -162,7 +167,7 @@ export class ConversationsService {
   }
 
   /** Persists QUEUED, then hands off to the worker (spec §33: no sending inside the request). */
-  private async addOutbound(tx: Transaction, auth: AuthContext, conversationId: string, body: string) {
+  private async addOutbound(tx: Transaction, auth: AuthContext, conversationId: string, body: string, aiGenerated = false) {
     const [message] = await tx
       .insert(messages)
       .values({
@@ -173,6 +178,7 @@ export class ConversationsService {
         senderUserId: auth.userId,
         content: body,
         status: 'QUEUED',
+        aiGenerated,
       })
       .returning();
     await tx
@@ -208,7 +214,7 @@ export class ConversationsService {
         .where(and(eq(conversations.id, id), eq(conversations.organizationId, auth.organizationId)))
         .for('update');
       if (!conv) throw notFound();
-      if (!input.internal) return this.addOutbound(tx, auth, id, input.body);
+      if (!input.internal) return this.addOutbound(tx, auth, id, input.body, input.aiGenerated ?? false);
       const [note] = await tx
         .insert(messages)
         .values({

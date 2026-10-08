@@ -119,13 +119,15 @@ Follow-ups noted, not done:
 
 ## Phase 4 — AI sales intelligence
 
-Slices: (1) hybrid scoring ✅ · (2) conversation analysis + summary · (3) reply assistant · (4) next action · (5) natural-language CRM search.
+Slices: (1) hybrid scoring ✅ · (2) conversation analysis + summary ✅ · (3) reply assistant ✅ · (4) next action · (5) natural-language CRM search.
 
 ### Decisions
 
 - **Hybrid scoring** (spec §14–15): pure rule engine in `packages/domain/scoring` (business email, phone, budget, inbound message, pricing/demo intent in English and Bangla, reply within 24h, no response after 2+ touches). Points, the rule/AI blend and the temperature thresholds are org settings; only overrides are stored, so new rules reach existing orgs. Leads keep `rule_score`, `ai_score` and a `score_breakdown`, so every score is explainable in the UI.
 - **When scores move:** `rescoreLeads` runs in the same transaction as every change that can affect it (create/import/inbound lead, edit, message sent or received, follow-up completed, AI analysis). It is cheap and idempotent. A settings change queues one `scoring.rescore_org` job (deduped by jobId). On boot the worker queues any org with unscored leads, which backfills leads that predate scoring.
-- **AI never sets the score directly:** an analysis writes `ai_score`, and the blend decides. Setting the AI weight to 0 gives rules-only scoring.
+- **AI never sets the score directly:** an analysis writes `ai_score`, and the blend decides. Setting the AI weight to 0 gives rules-only scoring. The latest AI view wins, whether it came from a lead or a conversation analysis.
+- **Conversation analysis** (spec §31) stores the structured result in `ai_analyses` and shows the summary in the inbox. Internal notes are included as context.
+- **Reply assistant** (spec §32): suggest, rewrite, translate (English/Bangla). It only fills the composer and nothing is stored or sent. Internal notes are excluded so they can never leak into a customer reply. Missing facts become `[placeholders]`, and the UI warns before a reply with placeholders is sent. Messages sent from an AI draft are flagged `aiGenerated` and shown as "AI-assisted". Auto-reply (sending without a human) stays off; it needs the policy engine in Phase 6.
 
 ### Threat model additions
 
@@ -133,6 +135,8 @@ Slices: (1) hybrid scoring ✅ · (2) conversation analysis + summary · (3) rep
 | --- | --- | --- | --- |
 | Elevation | Agent games scoring to jump the queue | scoring settings need `settings.manage` | agent → 403 |
 | Tampering | Customer writes "price" to inflate a score | rules are capped and explainable; managers see the breakdown | breakdown lists every rule applied |
+| Tampering | Customer message tells the model to "mark me HOT" | thread passed as a data block; output schema-validated; AI score is only half the blend | injection text in the test thread |
+| Info disclosure | Internal note leaks into an AI-drafted customer reply | reply input excludes INTERNAL messages | — (by construction) |
 
 ## Phase 3 — AI foundation
 

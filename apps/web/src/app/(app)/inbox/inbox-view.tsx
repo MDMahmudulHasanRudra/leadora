@@ -4,8 +4,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { Alert, Badge, Button, Card, formatDateTime, Select } from '@/components/ui';
+import { explainAiError } from '@/lib/ai';
 import { api, ApiError } from '@/lib/api-client';
 import { useRealtime } from '@/lib/realtime';
+import type { ConversationAnalysis } from '@/lib/types';
+import { ConversationInsight } from './conversation-insight';
 
 export interface ConversationItem {
   id: string;
@@ -27,8 +30,14 @@ export interface MessageItem {
   status: string;
   error: string | null;
   createdAt: string;
+  aiGenerated?: boolean;
   sender: { id: string; fullName?: string } | null;
 }
+
+type ReplyMode = { mode: 'suggest' } | { mode: 'rewrite' } | { mode: 'translate'; language: 'en' | 'bn' };
+
+/** Square-bracket placeholders the reply assistant leaves for facts it must not invent. */
+const PLACEHOLDER = /\[[^\]\n]{1,60}\]/;
 
 const VIEW_LABELS: [string, string][] = [
   ['all', 'All open'],
@@ -50,6 +59,7 @@ export function InboxView({
   users,
   timeZone,
   can,
+  analysis,
 }: {
   view: string;
   conversations: ConversationItem[];
@@ -57,12 +67,17 @@ export function InboxView({
   messages: MessageItem[];
   users: { id: string; fullName: string }[];
   timeZone: string;
-  can: { reply: boolean; assign: boolean };
+  can: { reply: boolean; assign: boolean; ai: boolean; aiConfigure: boolean };
+  analysis: { result: ConversationAnalysis; createdAt: string } | null;
 }) {
   const router = useRouter();
   const [internal, setInternal] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [aiDrafted, setAiDrafted] = useState(false);
+  const [aiNote, setAiNote] = useState<string | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
   const thread = useRef<HTMLOListElement>(null);
   const href = (params: { view?: string; c?: string }) => {
     const q = new URLSearchParams({ view: params.view ?? view, ...(params.c ? { c: params.c } : {}) });
@@ -93,13 +108,47 @@ export function InboxView({
     }
   }
 
+  // A different conversation starts with an empty composer.
+  useEffect(() => {
+    setDraft('');
+    setAiDrafted(false);
+    setAiNote(null);
+  }, [selected?.id]);
+
   async function onSend(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!selected) return;
-    const form = e.currentTarget;
-    const body = String(new FormData(form).get('body') ?? '').trim();
+    const body = draft.trim();
     if (!body) return;
-    if (await run(() => api(`/conversations/${selected.id}/messages`, { method: 'POST', body: { body, internal } }))) form.reset();
+    if (!internal && PLACEHOLDER.test(body) && !confirm('The reply still contains a [placeholder]. Send it anyway?')) return;
+    const sent = await run(() =>
+      api(`/conversations/${selected.id}/messages`, { method: 'POST', body: { body, internal, aiGenerated: !internal && aiDrafted } }),
+    );
+    if (sent) {
+      setDraft('');
+      setAiDrafted(false);
+      setAiNote(null);
+    }
+  }
+
+  /** Spec §32: the assistant only fills the composer; the agent reviews, edits and sends. */
+  async function assist(req: ReplyMode) {
+    if (!selected) return;
+    setAiBusy(true);
+    setError(null);
+    try {
+      const res = await api<{ reply: string; notes: string }>(`/ai/conversations/${selected.id}/reply`, {
+        method: 'POST',
+        body: { ...req, ...(req.mode !== 'suggest' ? { draft } : {}) },
+      });
+      setDraft(res.reply);
+      setAiDrafted(true);
+      setAiNote(res.notes || null);
+    } catch (err) {
+      setError(explainAiError(err, can.aiConfigure, 'Reply suggestions').message);
+    } finally {
+      setAiBusy(false);
+    }
   }
 
   return (
@@ -176,6 +225,7 @@ export function InboxView({
                       <p className={`mt-1 text-right text-[11px] ${mine && m.direction !== 'INTERNAL' ? 'text-white/80' : 'text-zinc-500'}`}>
                         {formatDateTime(m.createdAt, timeZone)}
                         {m.direction === 'OUTBOUND' && ` · ${STATUS_LABEL[m.status] ?? m.status.toLowerCase()}`}
+                        {m.aiGenerated && ' · AI-assisted'}
                       </p>
                       {m.status === 'FAILED' && m.error && <p className="mt-1 text-xs font-medium text-red-200">⚠ {m.error}</p>}
                     </div>
@@ -190,8 +240,43 @@ export function InboxView({
             )}
             {can.reply && (
               <form onSubmit={onSend} className="border-t border-zinc-100 p-3 dark:border-zinc-800">
+                {can.ai && !internal && (
+                  <div className="mb-2 flex flex-wrap items-center gap-1" role="toolbar" aria-label="AI reply assistant">
+                    <span className="mr-1 text-xs text-zinc-500">AI</span>
+                    <Button type="button" variant="secondary" className="h-7 px-2 text-xs" disabled={aiBusy} onClick={() => assist({ mode: 'suggest' })}>
+                      Suggest reply
+                    </Button>
+                    <Button type="button" variant="ghost" className="h-7 px-2 text-xs" disabled={aiBusy || !draft.trim()} onClick={() => assist({ mode: 'rewrite' })}>
+                      Improve
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs"
+                      disabled={aiBusy || !draft.trim()}
+                      onClick={() => assist({ mode: 'translate', language: 'bn' })}
+                    >
+                      To Bangla
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs"
+                      disabled={aiBusy || !draft.trim()}
+                      onClick={() => assist({ mode: 'translate', language: 'en' })}
+                    >
+                      To English
+                    </Button>
+                    {aiBusy && <span className="text-xs text-zinc-500">Writing…</span>}
+                  </div>
+                )}
                 <textarea
                   name="body"
+                  value={draft}
+                  onChange={(e) => {
+                    setDraft(e.target.value);
+                    if (!e.target.value) setAiDrafted(false);
+                  }}
                   rows={3}
                   maxLength={20_000}
                   aria-label={internal ? 'Internal note' : 'Reply'}
@@ -203,6 +288,12 @@ export function InboxView({
                     internal ? 'border-amber-300 bg-amber-50/50 dark:border-amber-800' : 'border-zinc-300 bg-white dark:border-zinc-700'
                   }`}
                 />
+                {aiDrafted && !internal && (
+                  <p className="mt-1 text-xs text-zinc-500">
+                    AI draft — check it before sending.{aiNote ? ` ${aiNote}` : ''}
+                    {PLACEHOLDER.test(draft) && <span className="font-medium text-amber-700 dark:text-amber-400"> Fill in the [placeholders].</span>}
+                  </p>
+                )}
                 <div className="mt-2 flex items-center justify-between">
                   <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
                     <input type="checkbox" checked={internal} onChange={(e) => setInternal(e.target.checked)} /> Internal note
@@ -263,6 +354,15 @@ export function InboxView({
               {selected.status === 'RESOLVED' ? 'Reopen' : 'Mark resolved'}
             </Button>
           )}
+          <ConversationInsight
+            key={selected.id}
+            conversationId={selected.id}
+            analysis={analysis?.result ?? null}
+            analyzedAt={analysis?.createdAt ?? null}
+            canRun={can.ai}
+            canConfigure={can.aiConfigure}
+            timeZone={timeZone}
+          />
         </Card>
       )}
     </div>

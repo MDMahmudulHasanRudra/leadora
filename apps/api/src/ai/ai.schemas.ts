@@ -64,3 +64,40 @@ export const DEFAULT_FEATURES = {
   nlSearch: true,
   autoReply: false,
 };
+
+const ACTIONS = ['CALL_NOW', 'SEND_PRICING', 'OFFER_DEMO', 'FOLLOW_UP_LATER', 'NURTURE', 'ESCALATE_TO_MANAGER', 'DISQUALIFY'] as const;
+const short = z.string().max(160);
+
+/** Spec §31. */
+export const conversationAnalysisSchema = z.strictObject({
+  summary: z.string().max(600),
+  intent: z.enum(['PURCHASE', 'INQUIRY', 'SUPPORT', 'COMPLAINT', 'PARTNERSHIP', 'SPAM', 'UNKNOWN']),
+  sentiment: z.enum(['POSITIVE', 'NEUTRAL', 'NEGATIVE', 'MIXED']),
+  urgency: z.enum(['LOW', 'MEDIUM', 'HIGH']),
+  buyingSignal: z.enum(['NONE', 'WEAK', 'MODERATE', 'STRONG']),
+  productInterest: z.array(short).max(10),
+  objections: z.array(short).max(10),
+  questions: z.array(short).max(10),
+  competitorMentions: z.array(short).max(10),
+  riskFlags: z.array(short).max(10),
+  recommendedNextAction: z.enum(ACTIONS),
+  score: z.number().int().min(0).max(100),
+});
+export type ConversationAnalysis = z.infer<typeof conversationAnalysisSchema>;
+
+/** Spec §32: suggest, rewrite and translate. The agent always reviews and sends. */
+export const replyRequestSchema = z
+  .object({
+    mode: z.enum(['suggest', 'rewrite', 'translate']),
+    draft: z.string().trim().max(20_000).optional(),
+    language: z.enum(['en', 'bn']).default('en'),
+    tone: z.enum(['friendly', 'formal', 'concise']).default('friendly'),
+  })
+  .refine((v) => v.mode === 'suggest' || !!v.draft, { path: ['draft'], message: 'Write a draft first' });
+export type ReplyRequest = z.infer<typeof replyRequestSchema>;
+
+export const replySchema = z.strictObject({
+  reply: z.string().max(4000),
+  language: z.enum(['en', 'bn']),
+  notes: z.string().max(400),
+});

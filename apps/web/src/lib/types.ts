@@ -278,3 +278,17 @@ export interface ScoringSettings {
   warmThreshold: number;
   rules: { key: string; label: string; enabled: boolean; points: number }[];
 }
+export interface ConversationAnalysis {
+  summary: string;
+  intent: string;
+  sentiment: 'POSITIVE' | 'NEUTRAL' | 'NEGATIVE' | 'MIXED';
+  urgency: 'LOW' | 'MEDIUM' | 'HIGH';
+  buyingSignal: 'NONE' | 'WEAK' | 'MODERATE' | 'STRONG';
+  productInterest: string[];
+  objections: string[];
+  questions: string[];
+  competitorMentions: string[];
+  riskFlags: string[];
+  recommendedNextAction: string;
+  score: number;
+}

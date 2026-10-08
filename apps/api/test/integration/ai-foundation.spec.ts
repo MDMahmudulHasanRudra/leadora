@@ -192,7 +192,7 @@ describe('AI foundation: settings, gateway, prompts, usage', () => {
     await configure();
     const lead = (await createLead(admin).expect(201)).body;
     const { body: list } = await admin.get('/api/v1/ai/prompts').expect(200);
-    expect(list.items).toEqual([expect.objectContaining({ key: 'lead_analysis', activeVersion: 0 })]);
+    expect(list.items).toContainEqual(expect.objectContaining({ key: 'lead_analysis', activeVersion: 0 }));
 
     const v1 = (
       await admin

@@ -5,12 +5,15 @@ import { AI_PROVIDER_FACTORY } from '../infra/tokens';
 import { LeadsModule } from '../leads/leads.module';
 import { AiController } from './ai.controller';
 import { AiService } from './ai.service';
+import { ConversationAiController } from './conversation-ai.controller';
+import { ConversationAiService } from './conversation-ai.service';
 
 @Module({
   imports: [LeadsModule],
-  controllers: [AiController],
+  controllers: [AiController, ConversationAiController],
   providers: [
     AiService,
+    ConversationAiService,
     {
       provide: AI_PROVIDER_FACTORY,
       useValue: (provider: string, apiKey: string) => {
