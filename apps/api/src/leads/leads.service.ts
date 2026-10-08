@@ -170,6 +170,22 @@ export class LeadsService {
     });
   }
 
+  /** Notes are immutable timeline entries (spec §20): corrections are new notes. */
+  async addNote(auth: AuthContext, id: string, body: string) {
+    return this.handle.db.transaction(async (tx) => {
+      const current = await this.lockLead(tx, auth.organizationId, id);
+      if (current.archivedAt) {
+        throw new ConflictException({ code: 'LEAD_ARCHIVED', message: 'Restore this lead before adding notes' });
+      }
+      const [activity] = await tx
+        .insert(activities)
+        .values({ organizationId: auth.organizationId, leadId: id, actorUserId: auth.userId, type: 'note.added', payload: { body } })
+        .returning({ id: activities.id, createdAt: activities.createdAt });
+      await tx.update(leads).set({ updatedAt: new Date() }).where(eq(leads.id, id));
+      return { ...activity, body };
+    });
+  }
+
   async setArchived(auth: AuthContext, id: string, archived: boolean) {
     return this.handle.db.transaction(async (tx) => {
       const current = await this.lockLead(tx, auth.organizationId, id);

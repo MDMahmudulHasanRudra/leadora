@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { z } from 'zod';
 import { type AuthContext, CurrentAuth, RequirePermission } from '../auth/auth-context';
 import { ZodPipe } from '../common/zod.pipe';
 import { LeadReader } from './lead-reader.service';
@@ -14,6 +15,7 @@ import {
 import { LeadsService } from './leads.service';
 
 const Id = new ParseUUIDPipe({ errorHttpStatusCode: 404 });
+const noteSchema = z.object({ body: z.string().trim().min(1).max(5000) });
 
 @ApiTags('leads')
 @Controller('leads')
@@ -60,6 +62,13 @@ export class LeadsController {
   @RequirePermission('lead.delete')
   restore(@CurrentAuth() auth: AuthContext, @Param('id', Id) id: string) {
     return this.leads.setArchived(auth, id, false);
+  }
+
+  @Post(':id/notes')
+  @HttpCode(201)
+  @RequirePermission('lead.update')
+  addNote(@CurrentAuth() auth: AuthContext, @Param('id', Id) id: string, @Body(new ZodPipe(noteSchema)) body: { body: string }) {
+    return this.leads.addNote(auth, id, body.body);
   }
 
   @Get(':id/activities')
