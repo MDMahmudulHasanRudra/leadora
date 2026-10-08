@@ -4,9 +4,12 @@ import type { Permission } from './permissions';
 export interface AuthContext {
   userId: string;
   organizationId: string;
+  /** Empty for API-key requests. */
   sessionToken: string;
   role: string;
   permissions: ReadonlySet<Permission>;
+  /** Set when the request authenticated with an API key (spec §92) instead of a session. */
+  apiKeyId?: string;
 }
 
 export type AuthedRequest = { auth?: AuthContext };

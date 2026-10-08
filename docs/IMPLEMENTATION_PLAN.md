@@ -12,7 +12,7 @@ Follows spec §103–§114 and the sprint backlog in §148. Each phase is done o
 | 3 | AI foundation: provider abstraction, OpenAI Responses API, settings, usage logging, prompt versioning, structured outputs | Done |
 | 4 | AI intelligence: scoring, conversation analysis, summaries, reply assistant, next action, NL search | Done |
 | 5 | Knowledge base / RAG with pgvector and citations | Done |
-| 6 | Automation engine | Not started |
+| 6 | Automation engine | Done |
 | 7 | Integrations: WhatsApp, Facebook, Instagram, web chat, API keys | Not started |
 | 8 | Analytics & forecasting | Not started |
 | 9 | Production hardening | Not started |
@@ -117,9 +117,23 @@ Follow-ups noted, not done:
 - Uploaded CSV content is stored in Postgres (≤ 5 MB); move it to object storage when the storage provider lands, and purge it after the import finishes.
 - Import retries are safe, but the stale-job case (worker killed mid-row with no retry left) leaves status `PROCESSING`; a periodic sweeper should mark old ones `FAILED`.
 
+## Phase 7 — Integrations
+
+Slices: (1) API keys · (2) signed outbound webhooks · (3) public lead form · (4) website chat · (5) WhatsApp / Messenger / Instagram adapters · (6) email delivery tracking.
+
+### Decisions
+
+- **Adapters only** (spec §88): every channel implements `ChannelProvider` (send) plus an inbound parser. Core lead and conversation code never sees provider payloads. Per-inbox credentials are encrypted at rest (AES-GCM) and never returned.
+- **API keys** (spec §92): `lk_<id>_<secret>`; only a SHA-256 of the secret is stored and the full key is shown once. A key has scopes (`leads:read`, `leads:write`, `conversations:read`, `webhooks:manage`) that map to a subset of permissions and can never exceed its creator's. It carries `expires_at`, `revoked_at` and `last_used_at`. Requests with `Authorization: Bearer` skip the cookie/CSRF path (no ambient credentials) and are rate-limited per key.
+- **Outbound webhooks** (spec §93): fed from the same outbox as automations. Each endpoint subscribes to event types. Deliveries are rows (`webhook_deliveries`) sent by the worker, signed with `X-Webhook-Signature: v1=hex(HMAC_SHA256(secret, "<timestamp>.<body>"))`, `X-Webhook-Timestamp` and `X-Webhook-ID` (stable across retries, so consumers can dedupe). They go through the SSRF-safe fetcher with retries 1m/5m/15m. An endpoint is disabled after 20 consecutive failures, and its owner is told.
+- **Public lead form** (spec §91): each form has a public key, an allowed-origins list, a honeypot field, a per-IP and per-form rate limit in Valkey, an optional CAPTCHA verifier hook (Turnstile/hCaptcha secret), and source attribution (WEBSITE plus UTM fields in metadata). It goes through `ingestLead` like every other lead. A dependency-free `lead-form.js` embed renders the form.
+- **Website chat:** a `WEB_CHAT` inbox with a public widget key. A visitor gets a signed session token on first contact and becomes a lead, and messages land in the normal inbox. Agent replies reach the widget by polling (no third-party realtime). Rate-limited, origin-checked and size-capped.
+- **Meta channels** (WhatsApp Cloud API, Messenger, Instagram): one Graph adapter family. Webhooks use the `hub.verify_token` challenge and verify `X-Hub-Signature-256` with the app secret against the raw body. They are idempotent on the provider message id; delivery/read statuses update messages; sending goes through the Graph API. Tests use signed fixtures and a fake HTTP layer, since no real credentials exist in development.
+- **Email tracking** (spec §90): a signed status webhook per email inbox (delivered, bounced, opened, complained) updates message status and adds a timeline entry. Bounces flag the lead's email.
+
 ## Phase 6 — Automation
 
-Slices: (1) event outbox · (2) rules, conditions, dispatcher, runs, DB actions · (3) AI and email actions · (4) time-based triggers · (5) automation UI.
+Slices: (1) event outbox ✅ · (2) rules, conditions, dispatcher, runs, DB actions ✅ · (3) AI and email actions ✅ · (4) time-based triggers ✅ · (5) automation UI ✅.
 
 ### Decisions
 

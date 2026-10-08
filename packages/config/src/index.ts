@@ -34,6 +34,8 @@ export const envSchema = z.object({
     .default('true')
     .transform((v) => v === 'true' || v === '1'),
   SESSION_TTL_HOURS: z.coerce.number().int().positive().max(24 * 90).default(24 * 7),
+  // Requests per minute per API key (spec §92).
+  API_KEY_RATE_LIMIT_PER_MIN: z.coerce.number().int().min(1).max(100_000).default(600),
 
   OPENAI_API_KEY: z.string().optional().default(''),
 
