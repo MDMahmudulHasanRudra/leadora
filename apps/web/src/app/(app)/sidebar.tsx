@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { NotificationBell } from '@/components/notification-bell';
 import { api } from '@/lib/api-client';
 import type { Identity } from '@/lib/types';
 
@@ -18,7 +19,7 @@ const SECTIONS: { title?: string; items: NavItem[] }[] = [
       { label: 'Tasks', href: '/tasks', permission: 'followup.view' },
       { label: 'Contacts', href: '/contacts', permission: 'lead.view' },
       { label: 'Companies', href: '/companies', permission: 'lead.view' },
-      { label: 'Inbox', phase: 2 },
+      { label: 'Inbox', href: '/inbox', permission: 'conversation.view' },
       { label: 'Knowledge Base', phase: 5 },
       { label: 'AI Assistant', phase: 4 },
       { label: 'Automations', phase: 6 },
@@ -33,6 +34,7 @@ const SECTIONS: { title?: string; items: NavItem[] }[] = [
       { label: 'Audit log', href: '/audit', permission: 'audit.view' },
       { label: 'Custom fields', href: '/settings/fields', permission: 'settings.manage' },
       { label: 'Assignment rules', href: '/settings/assignment', permission: 'settings.manage' },
+      { label: 'Inboxes', href: '/settings/inboxes', permission: 'settings.manage' },
     ],
   },
 ];
@@ -102,7 +104,8 @@ export function Sidebar({ identity }: { identity: Identity }) {
       </nav>
 
       <div className="mt-4 flex items-center justify-between gap-2 border-t border-zinc-200 px-2 pt-4 dark:border-zinc-800">
-        <div className="min-w-0">
+        <NotificationBell />
+        <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{identity.user.fullName}</p>
           <p className="truncate text-xs text-zinc-500">{identity.user.role.toLowerCase()}</p>
         </div>

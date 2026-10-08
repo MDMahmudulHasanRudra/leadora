@@ -140,6 +140,13 @@ Follow-ups noted, not done:
 | Elevation | Agent replies on conversations they can't see | `conversation.reply` required, conversation scoped to org | viewer → 403 |
 | DoS | Webhook flood | per-inbox rate limit; body ≤ 1 MB | — |
 
+**Status (2026-10-08): done.** Verified end to end through Caddy: a signed inbound email created a lead and an unread conversation (a bad signature got 401), an agent replied from the inbox, the worker delivered a threaded email (`Re:` plus `In-Reply-To`) to Mailpit, and the page updated live over the WebSocket.
+
+Follow-ups noted, not done:
+- Inbound HTML-only emails need an HTML→text step in the relay or the API (we store text).
+- Attachments wait for object storage (Phase 5).
+- Notifications created inside API transactions reach the browser on the next poll (≤ 60 s) or socket event; a transactional outbox (spec §118) would make them instant.
+
 ## Phase 1 / Sprint 4 — Pipeline, assignment, follow-ups
 
 Pipeline Kanban, assignment rules, follow-ups, tasks, notes, lead conversion to Contact + Company, dashboard metrics.

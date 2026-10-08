@@ -24,7 +24,8 @@ interface Props {
   stages: Stage[];
   users: Person[];
   timeZone: string;
-  can: { update: boolean; assign: boolean; archive: boolean; followup: boolean };
+  can: { update: boolean; assign: boolean; archive: boolean; followup: boolean; message: boolean };
+  inboxes: { id: string; name: string; channel: string }[];
 }
 
 const FIELD_LABELS: Record<string, string> = {
@@ -34,9 +35,10 @@ const FIELD_LABELS: Record<string, string> = {
   sourceId: 'source',
 };
 
-export function LeadDetail({ lead, activities, followups, tasks, customFields, stages, users, timeZone, can }: Props) {
+export function LeadDetail({ lead, activities, followups, tasks, customFields, stages, users, timeZone, can, inboxes }: Props) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
+  const [composing, setComposing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const archived = !!lead.archivedAt;
@@ -97,6 +99,23 @@ export function LeadDetail({ lead, activities, followups, tasks, customFields, s
     }
   }
 
+  async function startConversation(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const data = new FormData(e.currentTarget);
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await api<{ conversation: { id: string } }>('/conversations', {
+        method: 'POST',
+        body: { inboxId: data.get('inboxId'), leadId: lead.id, subject: data.get('subject') || undefined, body: data.get('body') },
+      });
+      router.push(`/inbox?c=${res.conversation.id}`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not send the message');
+      setBusy(false);
+    }
+  }
+
   async function addNote(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
@@ -140,6 +159,11 @@ export function LeadDetail({ lead, activities, followups, tasks, customFields, s
             </div>
           </div>
           <div className="flex gap-2">
+            {can.message && !archived && inboxes.length > 0 && (
+              <Button variant="secondary" onClick={() => setComposing((v) => !v)}>
+                Message
+              </Button>
+            )}
             {lead.contactId ? (
               <Link
                 href={`/contacts/${lead.contactId}`}
@@ -185,6 +209,38 @@ export function LeadDetail({ lead, activities, followups, tasks, customFields, s
       </div>
 
       {error && <Alert>{error}</Alert>}
+
+      {composing && (
+        <Card className="p-5">
+          <form onSubmit={startConversation} className="grid gap-3 sm:grid-cols-2">
+            <Select name="inboxId" aria-label="Send from" required>
+              {inboxes.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.name} ({i.channel.toLowerCase()})
+                </option>
+              ))}
+            </Select>
+            <Input name="subject" placeholder="Subject" aria-label="Subject" maxLength={300} />
+            <textarea
+              name="body"
+              required
+              rows={4}
+              maxLength={20000}
+              aria-label="Message"
+              placeholder={`Write to ${lead.fullName}…`}
+              className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm sm:col-span-2 dark:border-zinc-700 dark:bg-zinc-900"
+            />
+            <div className="flex justify-end gap-2 sm:col-span-2">
+              <Button type="button" variant="secondary" onClick={() => setComposing(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={busy}>
+                Send
+              </Button>
+            </div>
+          </form>
+        </Card>
+      )}
 
       {editing ? (
         <Card className="p-5">
