@@ -15,6 +15,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { CommunicationModule } from './communication/communication.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { RealtimeModule } from './realtime/realtime.module';
+import { AiModule } from './ai/ai.module';
 import { LeadsModule } from './leads/leads.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { TeamsModule } from './teams/teams.module';
@@ -41,6 +42,7 @@ import { UsersModule } from './users/users.module';
     AnalyticsModule,
     CommunicationModule,
     NotificationsModule,
+    AiModule,
   ],
 })
 export class AppModule {}

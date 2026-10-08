@@ -9,6 +9,7 @@ Object.assign(process.env, {
   JWT_SECRET: 'test-secret-'.padEnd(48, 'x'),
   DATA_ENCRYPTION_KEY: 'test-data-key-'.padEnd(48, 'z'),
   SMTP_URL: '',
+  ENABLE_AI: 'true',
   APP_ORIGINS: 'http://localhost:8080',
   ALLOW_SIGNUP: 'false',
   COOKIE_SECURE: 'false',

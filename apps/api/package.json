@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@leadora/ai": "workspace:*",
     "@leadora/config": "workspace:*",
     "@leadora/database": "workspace:*",
     "@leadora/domain": "workspace:*",

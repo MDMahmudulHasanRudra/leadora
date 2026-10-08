@@ -7,6 +7,7 @@ const DOMAIN_STATUS: Record<DomainErrorKind, number> = {
   conflict: HttpStatus.CONFLICT,
   not_found: HttpStatus.NOT_FOUND,
   forbidden: HttpStatus.FORBIDDEN,
+  upstream: HttpStatus.BAD_GATEWAY,
 };
 
 export interface ApiErrorBody {

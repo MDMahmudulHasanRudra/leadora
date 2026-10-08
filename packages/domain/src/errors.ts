@@ -1,4 +1,5 @@
-export type DomainErrorKind = 'invalid' | 'conflict' | 'not_found' | 'forbidden';
+/** `upstream`: a dependency (e.g. the AI provider) failed; maps to 502. */
+export type DomainErrorKind = 'invalid' | 'conflict' | 'not_found' | 'forbidden' | 'upstream';
 
 /** Business-rule failure, independent of transport. The API maps `kind` to an HTTP status. */
 export class DomainError extends Error {

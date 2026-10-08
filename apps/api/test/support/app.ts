@@ -18,8 +18,11 @@ export interface TestApp {
   close(): Promise<void>;
 }
 
-export async function createTestApp(): Promise<TestApp> {
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+/** overrides replace providers (e.g. the AI provider factory) with test doubles. */
+export async function createTestApp(overrides: { token: unknown; value: unknown }[] = []): Promise<TestApp> {
+  const builder = Test.createTestingModule({ imports: [AppModule] });
+  for (const o of overrides) builder.overrideProvider(o.token).useValue(o.value);
+  const moduleRef = await builder.compile();
   const app = moduleRef.createNestApplication<NestExpressApplication>({ logger: false, rawBody: true });
   configureApp(app);
   await app.init();

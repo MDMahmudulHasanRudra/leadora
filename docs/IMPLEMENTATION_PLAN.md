@@ -117,6 +117,27 @@ Follow-ups noted, not done:
 - Uploaded CSV content is stored in Postgres (≤ 5 MB); move it to object storage when the storage provider lands, and purge it after the import finishes.
 - Import retries are safe, but the stale-job case (worker killed mid-row with no retry left) leaves status `PROCESSING`; a periodic sweeper should mark old ones `FAILED`.
 
+## Phase 3 — AI foundation
+
+### Decisions
+
+- **`packages/ai`** holds the `AiProvider` interface (`generateStructured`, `generateText`, `embed`) and an `OpenAiProvider` that calls the Responses and Embeddings HTTP APIs directly with `fetch`. That gives timeouts, retries on 429/5xx, and no SDK version drift. Business code never imports a provider (spec §2.3, rule 3).
+- **One gateway, `runAi`**, for every call: platform `ENABLE_AI`, then org settings (enabled and feature on), then monthly budget (block at 100%, spec §75), then the active prompt version, then provider, then Zod validation with one corrective retry (spec §30), then an `ai_runs` row (tokens, cached tokens, estimated cost, latency, status, error code, prompt version). A failed, blocked or invalid call never writes business data.
+- **Models** are logical profiles (`fast`, `balanced`, `reasoning`, `embedding`) mapped to model IDs in org settings (spec §123). Nothing is hard-coded. Prices per model are also org settings; if a price is missing, the cost is recorded as unknown rather than guessed.
+- **API key** is AES-GCM encrypted (`DATA_ENCRYPTION_KEY`). GET returns only `hasApiKey` and the last 4 characters (spec §74).
+- **Prompts** are versioned in `ai_prompts` / `ai_prompt_versions`. Built-in v1 defaults ship in code and are used until a version is activated (spec §29).
+- **Prompt injection** (spec §56–57): CRM data and messages go into the input as delimited, labelled data blocks. The system prompt says that content is data, not instructions. Tools and authorization stay in code.
+- **AI is optional:** every AI endpoint fails fast with `AI_DISABLED` / `AI_NOT_CONFIGURED`, and the CRM never depends on it (spec §121).
+
+### Threat model additions
+
+| Threat | Abuse case | Mitigation | Test |
+| --- | --- | --- | --- |
+| Info disclosure | API key leaked through settings API or logs | encrypted at rest, masked on read, never logged | key absent from responses and DB column |
+| Elevation | Agent changes AI provider or budget | `ai.configure` required | agent → 403 |
+| Tampering | Prompt injection inside lead/message text | data blocks + instruction hierarchy; output schema-validated; no tool execution in Phase 3 | injected text cannot change stored fields outside the schema |
+| DoS / cost | Runaway spend | monthly budget block, `ai` queue concurrency, max output tokens per purpose | over budget → 409 `AI_BUDGET_EXCEEDED` |
+
 ## Phase 2 — Communication
 
 ### Decisions
