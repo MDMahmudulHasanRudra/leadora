@@ -157,3 +157,72 @@ export async function runStructured<T>(db: Database, deps: AiDeps, ctx: AiContex
     return cost === null ? null : cost.toFixed(6);
   }
 }
+
+/** The org's embedding model, or null when none is configured (knowledge base shows documents as outdated). */
+export async function currentEmbeddingModel(db: Database, organizationId: string): Promise<string | null> {
+  const [s] = await db.select({ models: aiSettings.models }).from(aiSettings).where(eq(aiSettings.organizationId, organizationId));
+  return s?.models.embedding ?? null;
+}
+
+/**
+ * Embeddings through the same gate as every AI call: platform and org switches, the knowledge-base feature,
+ * key, embedding model and budget, with an ai_runs row (tokens and cost) per batch (spec §28).
+ */
+export async function runEmbedding(
+  db: Database,
+  deps: AiDeps,
+  ctx: AiContext,
+  task: { purpose: string; input: string[]; dimensions: number; entity?: { type: string; id: string } },
+): Promise<{ vectors: number[][]; model: string }> {
+  if (!deps.platformEnabled) throw new DomainError('conflict', 'AI_PLATFORM_DISABLED', 'AI is turned off for this installation');
+  const [settings] = await db.select().from(aiSettings).where(eq(aiSettings.organizationId, ctx.organizationId));
+  if (!settings?.enabled) throw new DomainError('conflict', 'AI_DISABLED', 'AI is turned off for your organization');
+  if (settings.features.knowledgeBase === false) {
+    throw new DomainError('conflict', 'AI_FEATURE_DISABLED', 'The knowledge base is turned off for your organization');
+  }
+  if (!settings.apiKeyEnc) throw new DomainError('conflict', 'AI_NOT_CONFIGURED', 'Add an AI provider API key in AI settings');
+  const model = settings.models.embedding;
+  if (!model) throw new DomainError('conflict', 'AI_NOT_CONFIGURED', 'Choose an embedding model in AI settings');
+
+  const record = (values: Partial<typeof aiRuns.$inferInsert> & { status: 'SUCCEEDED' | 'FAILED' | 'BLOCKED' }) =>
+    db.insert(aiRuns).values({
+      organizationId: ctx.organizationId,
+      userId: ctx.userId,
+      provider: settings.provider,
+      model,
+      purpose: task.purpose,
+      promptKey: 'embedding',
+      promptVersion: 0,
+      entityType: task.entity?.type ?? null,
+      entityId: task.entity?.id ?? null,
+      ...values,
+    });
+
+  const budget = settings.monthlyBudgetUsd === null ? null : Number(settings.monthlyBudgetUsd);
+  if (budget !== null && (await monthToDateSpendUsd(db, ctx.organizationId)) >= budget) {
+    await record({ status: 'BLOCKED', errorCode: 'AI_BUDGET_EXCEEDED', attempts: 0 });
+    throw new DomainError('conflict', 'AI_BUDGET_EXCEEDED', 'The monthly AI budget is used up');
+  }
+
+  const provider = deps.providerFor(settings.provider, decryptSecret(settings.apiKeyEnc, deps.encryptionKey));
+  const started = Date.now();
+  try {
+    const res = await provider.embed({ model, input: task.input, dimensions: task.dimensions });
+    if (res.vectors.length !== task.input.length || res.vectors.some((v) => v.length !== task.dimensions)) {
+      throw new AiProviderError('AI_BAD_REQUEST', `The embedding model must return ${task.dimensions}-dimension vectors`);
+    }
+    const cost = estimateCostUsd(settings.prices[model], res.usage);
+    await record({
+      status: 'SUCCEEDED',
+      attempts: 1,
+      latencyMs: Date.now() - started,
+      ...res.usage,
+      estimatedCostUsd: cost === null ? null : cost.toFixed(6),
+    });
+    return { vectors: res.vectors, model };
+  } catch (err) {
+    const code = err instanceof AiProviderError ? err.code : 'AI_UNAVAILABLE';
+    await record({ status: 'FAILED', errorCode: code, attempts: 1, latencyMs: Date.now() - started });
+    throw new DomainError('upstream', code, err instanceof AiProviderError ? err.message : 'The AI provider failed');
+  }
+}

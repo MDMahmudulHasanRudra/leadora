@@ -124,10 +124,10 @@ export class OpenAiProvider implements AiProvider {
     return this.toResult(json, requestId, req.model);
   }
 
-  async embed(req: { model: string; input: string[] }): Promise<EmbeddingResult> {
+  async embed(req: { model: string; input: string[]; dimensions?: number }): Promise<EmbeddingResult> {
     const { json } = await this.post<{ data: { embedding: number[]; index: number }[]; model?: string; usage?: { prompt_tokens?: number } }>(
       '/embeddings',
-      { model: req.model, input: req.input },
+      { model: req.model, input: req.input, ...(req.dimensions ? { dimensions: req.dimensions } : {}) },
     );
     return {
       vectors: [...json.data].sort((a, b) => a.index - b.index).map((d) => d.embedding),

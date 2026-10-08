@@ -1,7 +1,7 @@
 import { Global, Inject, Module, type OnApplicationShutdown } from '@nestjs/common';
 import type { Env } from '@leadora/config';
 import { Queue } from 'bullmq';
-import { DEFAULT_QUEUE, ENV, IMPORTS_QUEUE, MESSAGES_QUEUE } from './tokens';
+import { DEFAULT_QUEUE, EMBEDDINGS_QUEUE, ENV, IMPORTS_QUEUE, MESSAGES_QUEUE } from './tokens';
 
 const queue = (token: symbol, name: string) => ({
   provide: token,
@@ -11,17 +11,18 @@ const queue = (token: symbol, name: string) => ({
 
 @Global()
 @Module({
-  providers: [queue(IMPORTS_QUEUE, 'imports'), queue(MESSAGES_QUEUE, 'messages'), queue(DEFAULT_QUEUE, 'default')],
-  exports: [IMPORTS_QUEUE, MESSAGES_QUEUE, DEFAULT_QUEUE],
+  providers: [queue(IMPORTS_QUEUE, 'imports'), queue(MESSAGES_QUEUE, 'messages'), queue(DEFAULT_QUEUE, 'default'), queue(EMBEDDINGS_QUEUE, 'embeddings')],
+  exports: [IMPORTS_QUEUE, MESSAGES_QUEUE, DEFAULT_QUEUE, EMBEDDINGS_QUEUE],
 })
 export class QueuesModule implements OnApplicationShutdown {
   constructor(
     @Inject(IMPORTS_QUEUE) private readonly imports: Queue,
     @Inject(MESSAGES_QUEUE) private readonly messages: Queue,
     @Inject(DEFAULT_QUEUE) private readonly defaults: Queue,
+    @Inject(EMBEDDINGS_QUEUE) private readonly embeddings: Queue,
   ) {}
 
   async onApplicationShutdown() {
-    await Promise.allSettled([this.imports.close(), this.messages.close(), this.defaults.close()]);
+    await Promise.allSettled([this.imports.close(), this.messages.close(), this.defaults.close(), this.embeddings.close()]);
   }
 }

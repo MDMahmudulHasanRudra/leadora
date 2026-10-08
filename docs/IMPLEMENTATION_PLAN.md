@@ -117,6 +117,30 @@ Follow-ups noted, not done:
 - Uploaded CSV content is stored in Postgres (≤ 5 MB); move it to object storage when the storage provider lands, and purge it after the import finishes.
 - Import retries are safe, but the stale-job case (worker killed mid-row with no retry left) leaves status `PROCESSING`; a periodic sweeper should mark old ones `FAILED`.
 
+## Phase 5 — Knowledge base (RAG)
+
+Slices: (1) storage + sources + indexing pipeline · (2) permission-aware retrieval + cited answers · (3) knowledge base UI · (4) grounded reply drafts.
+
+### Decisions
+
+- **One knowledge base per organization** with collections and documents (spec §33, §100), plus org retrieval settings. Collections carry the access scope: everyone with `knowledge.view`, or only listed teams. `knowledge.manage` sees everything.
+- **Storage** sits behind a `StorageProvider` (`packages/storage`): local disk for development and single-node installs (a Docker volume, so outside the container filesystem, spec §55), or any S3-compatible service through the AWS SDK (Apache-2.0). No MinIO in the distribution (license matrix).
+- **Sources:** file upload (PDF, DOCX, TXT, MD, CSV), pasted text, and URL. Uploads are checked for size, extension, MIME and content signature (magic bytes, valid UTF-8 for text), and the original is kept so documents can be re-indexed. URL ingestion goes through `safeFetch`: http(s) only, no credentials, DNS answers checked against private/loopback/link-local/metadata ranges at connect time (so rebinding can't slip through), redirects re-checked, robots.txt respected, size and time limits. Readable text is extracted and a snapshot stored.
+- **Pipeline** (worker, `embeddings` queue): UPLOADED → PROCESSING → (parse → chunk → embed → store) → INDEXED or FAILED. Chunks of about 3,000 characters with overlap keep the document version, page, section and ordinal. Each embedding batch goes through the AI gateway (switches, budget, `ai_runs` cost logging).
+- **Vectors:** pgvector, `vector(1536)` with an HNSW cosine index. The embedding model is asked for 1536 dimensions. Each document records the model that embedded it. If the org's embedding model changes, older documents show as OUTDATED and are left out of retrieval until re-indexed, because vectors from different models can't be compared.
+- **Retrieval** is hybrid: vector similarity plus Postgres full-text (`simple` config, so Bangla isn't stemmed wrongly), merged by reciprocal rank fusion. The access filter is applied inside the SQL (spec §35).
+- **Answers** cite their sources (spec §34, §37): the model sees numbered source blocks and must return the ids it used. Ids it wasn't given are dropped. With no evidence the answer says so without calling the model.
+
+### Threat model additions
+
+| Threat | Abuse case | Mitigation | Test |
+| --- | --- | --- | --- |
+| SSRF | URL source points at `169.254.169.254`, `localhost` or an internal service, directly or via redirect/DNS | `safeFetch` checks every resolved address at connect time and every redirect; http(s) only | private IPs, redirects to private IPs rejected |
+| Tampering | Malicious file disguised by extension (e.g. HTML or an executable named `.pdf`) | signature + MIME + extension must agree; files never executed; served back as attachments with `nosniff` | mismatched signature → 422 |
+| Info disclosure | Agent retrieves a team-restricted document through search, an answer or a reply draft | access filter inside the retrieval SQL, shared by every caller | agent outside team gets no chunks |
+| Tampering | Document text contains prompt-injection instructions | chunks passed as data blocks; answers are schema-validated; no tools in RAG | — (data-block test) |
+| DoS / cost | Huge uploads or endless re-indexing | size limits, budget checks per embedding batch, one queued job per document | over-size → 413/422 |
+
 ## Phase 4 — AI sales intelligence
 
 Slices: (1) hybrid scoring ✅ · (2) conversation analysis + summary ✅ · (3) reply assistant ✅ · (4) next action ✅ · (5) natural-language CRM search ✅.

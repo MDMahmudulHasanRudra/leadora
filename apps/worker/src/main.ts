@@ -2,10 +2,12 @@ import http from 'node:http';
 import { Queue, Worker, type Job } from 'bullmq';
 import pino from 'pino';
 import { baseLoggerOptions, loadEnv } from '@leadora/config';
+import { OpenAiProvider } from '@leadora/ai';
 import { createDb } from '@leadora/database';
 import {
   type ChannelProviders,
   deliverMessage,
+  indexDocument,
   markLeadImportFailed,
   processInboundEvent,
   processLeadImport,
@@ -14,6 +16,7 @@ import {
   rescoreOrganization,
   sendFollowupReminders,
 } from '@leadora/domain';
+import { createStorage } from '@leadora/storage';
 import Redis from 'ioredis';
 import { handleLeadImport } from './handlers/lead-import';
 import { handleMessageSend } from './handlers/message-send';
@@ -28,6 +31,16 @@ const connection = { url: env.VALKEY_URL, maxRetriesPerRequest: null };
 const publisher = new Redis(env.VALKEY_URL, { maxRetriesPerRequest: 2 });
 const email = env.SMTP_URL ? new SmtpEmailProvider(env.SMTP_URL) : null;
 const providers: ChannelProviders = email ? { EMAIL: email } : {};
+const storage = createStorage(env);
+// Same provider wiring as the API's AI module; the org's own key comes from ai_settings per call.
+const aiDeps = {
+  platformEnabled: env.ENABLE_AI,
+  encryptionKey: env.DATA_ENCRYPTION_KEY,
+  providerFor: (provider: string, apiKey: string) => {
+    if (provider === 'openai') return new OpenAiProvider({ apiKey });
+    throw new Error(`Unsupported AI provider ${provider}`);
+  },
+};
 const publish = async (organizationId: string, type: string, data: Record<string, unknown>, userId?: string) => {
   await publisher.publish(REALTIME_CHANNEL, JSON.stringify({ organizationId, type, data, ...(userId ? { userId } : {}) })).catch(() => undefined);
 };
@@ -49,6 +62,10 @@ const handlers: Partial<Record<QueueName, Record<string, (job: Job) => Promise<u
         if (result.notifyUserId) await publish(result.organizationId, 'notification.created', {}, result.notifyUserId);
       }
     },
+  },
+  embeddings: {
+    'kb.index': (job) =>
+      indexDocument(db, { ai: aiDeps, storage }, job.data.documentId, { finalAttempt: job.attemptsMade + 1 >= (job.opts.attempts ?? 1) }),
   },
   imports: {
     'lead.import': (job) =>

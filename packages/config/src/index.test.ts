@@ -37,3 +37,9 @@ test('rejects missing DATABASE_URL', () => {
   const { DATABASE_URL: _omit, ...rest } = base;
   assert.throws(() => loadEnv(rest), EnvValidationError);
 });
+
+test('s3 storage needs a bucket', () => {
+  assert.throws(() => loadEnv({ ...base, STORAGE_DRIVER: 's3' }), (err: unknown) => err instanceof EnvValidationError && err.issues.some((i) => i.startsWith('STORAGE_BUCKET')));
+  assert.equal(loadEnv({ ...base, STORAGE_DRIVER: 's3', STORAGE_BUCKET: 'leadora' }).STORAGE_BUCKET, 'leadora');
+  assert.equal(loadEnv(base).STORAGE_LOCAL_DIR, './data/uploads');
+});

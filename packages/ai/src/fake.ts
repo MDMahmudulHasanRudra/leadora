@@ -33,8 +33,11 @@ export class FakeAiProvider implements AiProvider {
     return this.next(req);
   }
 
-  async embed(req: { model: string; input: string[] }): Promise<EmbeddingResult> {
-    return { vectors: req.input.map((text) => fakeEmbedding(text)), model: req.model, usage: { inputTokens: req.input.length * 10, cachedTokens: 0, outputTokens: 0 } };
+  readonly embedRequests: { model: string; input: string[]; dimensions?: number }[] = [];
+
+  async embed(req: { model: string; input: string[]; dimensions?: number }): Promise<EmbeddingResult> {
+    this.embedRequests.push(req);
+    return { vectors: req.input.map((text) => fakeEmbedding(text, req.dimensions)), model: req.model, usage: { inputTokens: req.input.length * 10, cachedTokens: 0, outputTokens: 0 } };
   }
 }
 

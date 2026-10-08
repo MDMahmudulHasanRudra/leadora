@@ -38,6 +38,16 @@ export const envSchema = z.object({
   OPENAI_API_KEY: z.string().optional().default(''),
 
   STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
+  // local: a directory outside the app image (a Docker volume in Compose).
+  STORAGE_LOCAL_DIR: z.string().default('./data/uploads'),
+  // s3: any S3-compatible service.
+  STORAGE_BUCKET: z.string().optional().default(''),
+  STORAGE_REGION: z.string().default('us-east-1'),
+  STORAGE_ENDPOINT: z.string().optional().default(''),
+  STORAGE_ACCESS_KEY: z.string().optional().default(''),
+  STORAGE_SECRET_KEY: z.string().optional().default(''),
+  STORAGE_FORCE_PATH_STYLE: flag,
+  KB_MAX_FILE_MB: z.coerce.number().int().min(1).max(200).default(20),
 
   ENABLE_AI: flag,
   ENABLE_KNOWLEDGE_BASE: flag,
@@ -46,6 +56,10 @@ export const envSchema = z.object({
   ENABLE_EMAIL: flag,
   ENABLE_ADVANCED_ANALYTICS: flag,
   ENABLE_AI_AUTO_REPLY: flag,
+}).superRefine((env, ctx) => {
+  if (env.STORAGE_DRIVER === 's3' && !env.STORAGE_BUCKET) {
+    ctx.addIssue({ code: 'custom', path: ['STORAGE_BUCKET'], message: 'STORAGE_BUCKET is required when STORAGE_DRIVER=s3' });
+  }
 });
 
 export type Env = z.infer<typeof envSchema>;

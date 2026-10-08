@@ -11,3 +11,7 @@ coverage/
 .DS_Store
 .turbo/
 storage/
+
+# Local file storage (STORAGE_DRIVER=local outside Docker)
+/data/
+apps/*/data/

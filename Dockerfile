@@ -17,6 +17,7 @@ COPY packages/config/package.json packages/config/
 COPY packages/database/package.json packages/database/
 COPY packages/domain/package.json packages/domain/
 COPY packages/ai/package.json packages/ai/
+COPY packages/storage/package.json packages/storage/
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store \
     pnpm install --frozen-lockfile --store-dir /pnpm-store
 
@@ -28,7 +29,7 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store \
     pnpm --filter @leadora/worker deploy --prod --frozen-lockfile --store-dir /pnpm-store /out/worker
 
 FROM ${NODE_IMAGE} AS runtime
-RUN apk add --no-cache tini
+RUN apk add --no-cache tini && mkdir -p /data/uploads && chown node:node /data/uploads
 ENV NODE_ENV=production
 WORKDIR /app
 USER node

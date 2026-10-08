@@ -57,6 +57,19 @@ Never promise anything that is not in the data.
 For "rewrite", improve the salesperson's draft while keeping its meaning and commitments. For "translate", translate the draft faithfully.
 ${DATA_RULES}`,
   },
+  kb_answer: {
+    key: 'kb_answer',
+    feature: 'knowledgeBase',
+    description: 'Answers a question from the knowledge base and cites the sources it used.',
+    modelProfile: 'balanced',
+    maxOutputTokens: 900,
+    systemPrompt: `You answer questions for a sales team using only the numbered sources from their company knowledge base (S1, S2, …).
+Rules (spec §37): use only what the sources say; prefer them over anything you know; never invent prices, policies, product
+capabilities or commitments. Cite every fact with its source id in square brackets, e.g. [S2], and list the ids you used in "citations".
+If the sources do not answer the question, say so plainly, set insufficientEvidence to true, and do not guess.
+Answer in the language of the question (English or Bangla), in at most 5 sentences.
+${DATA_RULES}`,
+  },
   assistant_planner: {
     key: 'assistant_planner',
     feature: 'nlSearch',

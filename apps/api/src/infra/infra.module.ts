@@ -8,8 +8,9 @@ import {
 } from '@nestjs/common';
 import { loadEnv, type Env } from '@leadora/config';
 import { createDb, type DbHandle } from '@leadora/database';
+import { createStorage } from '@leadora/storage';
 import Redis from 'ioredis';
-import { DB, ENV, VALKEY } from './tokens';
+import { DB, ENV, STORAGE, VALKEY } from './tokens';
 
 const VALKEY_READY_TIMEOUT_MS = 5000;
 
@@ -28,8 +29,9 @@ const VALKEY_READY_TIMEOUT_MS = 5000;
       useFactory: (env: Env) =>
         new Redis(env.VALKEY_URL, { maxRetriesPerRequest: 2, enableOfflineQueue: false }),
     },
+    { provide: STORAGE, inject: [ENV], useFactory: (env: Env) => createStorage(env) },
   ],
-  exports: [ENV, DB, VALKEY],
+  exports: [ENV, DB, VALKEY, STORAGE],
 })
 export class InfraModule implements OnModuleInit, OnApplicationShutdown {
   private readonly logger = new Logger(InfraModule.name);

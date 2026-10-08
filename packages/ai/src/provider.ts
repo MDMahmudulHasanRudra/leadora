@@ -42,7 +42,8 @@ export interface AiProvider {
   readonly name: string;
   generateStructured(req: StructuredRequest): Promise<AiResult>;
   generateText(req: TextRequest): Promise<AiResult>;
-  embed(req: { model: string; input: string[] }): Promise<EmbeddingResult>;
+  /** dimensions asks the model for vectors of that size (all stored vectors share one size). */
+  embed(req: { model: string; input: string[]; dimensions?: number }): Promise<EmbeddingResult>;
 }
 
 /** Provider failure with a stable code for ai_runs and the API error contract. */
