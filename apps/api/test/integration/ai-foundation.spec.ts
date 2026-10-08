@@ -19,6 +19,7 @@ const analysis = (over: object = {}) =>
     productInterest: ['blue model'],
     recommendedAction: 'SEND_PRICING',
     rationale: 'Specific quantity and deadline.',
+    nextAction: { type: 'CALL', inHours: 4, note: 'Confirm quantity and send the price sheet.' },
     ...over,
   });
 
@@ -136,7 +137,7 @@ describe('AI foundation: settings, gateway, prompts, usage', () => {
     fake.reply(analysis());
 
     const res = await analyze(admin, lead.id).expect(200);
-    expect(res.body).toMatchObject({ score: 88, intent: 'PURCHASE', recommendedAction: 'SEND_PRICING' });
+    expect(res.body).toMatchObject({ score: 88, intent: 'PURCHASE', recommendedAction: 'SEND_PRICING', nextAction: { type: 'CALL', inHours: 4 } });
     expect(seen).toEqual([{ provider: 'openai', apiKey: KEY }]);
 
     const req = fake.requests[0]!;

@@ -119,7 +119,7 @@ Follow-ups noted, not done:
 
 ## Phase 4 — AI sales intelligence
 
-Slices: (1) hybrid scoring ✅ · (2) conversation analysis + summary ✅ · (3) reply assistant ✅ · (4) next action · (5) natural-language CRM search.
+Slices: (1) hybrid scoring ✅ · (2) conversation analysis + summary ✅ · (3) reply assistant ✅ · (4) next action ✅ · (5) natural-language CRM search.
 
 ### Decisions
 
@@ -128,6 +128,7 @@ Slices: (1) hybrid scoring ✅ · (2) conversation analysis + summary ✅ · (3)
 - **AI never sets the score directly:** an analysis writes `ai_score`, and the blend decides. Setting the AI weight to 0 gives rules-only scoring. The latest AI view wins, whether it came from a lead or a conversation analysis.
 - **Conversation analysis** (spec §31) stores the structured result in `ai_analyses` and shows the summary in the inbox. Internal notes are included as context.
 - **Reply assistant** (spec §32): suggest, rewrite, translate (English/Bangla). It only fills the composer and nothing is stored or sent. Internal notes are excluded so they can never leak into a customer reply. Missing facts become `[placeholders]`, and the UI warns before a reply with placeholders is sent. Messages sent from an AI draft are flagged `aiGenerated` and shown as "AI-assisted". Auto-reply (sending without a human) stays off; it needs the policy engine in Phase 6.
+- **Next action:** lead analysis proposes one concrete follow-up (type, hours from now, note). "Schedule it" turns it into an ordinary follow-up through the normal API with the user's permissions. AI never writes it on its own (spec §39: reversible writes need approval).
 
 ### Threat model additions
 

@@ -398,6 +398,7 @@ export function LeadDetail({ lead, activities, followups, tasks, customFields, s
         analyzedAt={analysis?.createdAt ?? null}
         canRun={can.ai && !archived}
         canConfigure={can.aiConfigure}
+        canSchedule={can.followup && !archived}
         timeZone={timeZone}
       />
 

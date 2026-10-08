@@ -270,6 +270,8 @@ export interface LeadAnalysis {
   productInterest: string[];
   recommendedAction: string;
   rationale: string;
+  /** Missing on analyses stored before next actions existed. */
+  nextAction?: { type: 'CALL' | 'EMAIL' | 'MESSAGE' | 'MEETING' | 'NONE'; inHours: number; note: string };
 }
 export interface ScoringSettings {
   ruleWeight: number;

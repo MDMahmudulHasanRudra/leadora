@@ -53,6 +53,12 @@ export const leadAnalysisSchema = z.strictObject({
   productInterest: z.array(z.string().max(120)).max(10),
   recommendedAction: z.enum(['CALL_NOW', 'SEND_PRICING', 'OFFER_DEMO', 'FOLLOW_UP_LATER', 'NURTURE', 'ESCALATE_TO_MANAGER', 'DISQUALIFY']),
   rationale: z.string().max(400),
+  // A concrete follow-up the salesperson can schedule with one click (spec §108 "next action").
+  nextAction: z.strictObject({
+    type: z.enum(['CALL', 'EMAIL', 'MESSAGE', 'MEETING', 'NONE']),
+    inHours: z.number().int().min(0).max(720),
+    note: z.string().max(300),
+  }),
 });
 export type LeadAnalysis = z.infer<typeof leadAnalysisSchema>;
 

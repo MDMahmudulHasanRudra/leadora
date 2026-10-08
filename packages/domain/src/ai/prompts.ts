@@ -26,6 +26,8 @@ export const BUILTIN_PROMPTS: Record<string, PromptDefinition> = {
 Assess how likely the lead is to buy soon, using only the data provided.
 Score 0-100: 80+ clear purchase intent with budget or timeline; 50-79 genuine interest; below 50 early, vague or unqualified.
 Write the summary in plain English for a busy salesperson (max 3 sentences). Keep objections and interests short.
+Propose one concrete next action: the follow-up type, how many hours from now it should happen (0 = right away),
+and a one-line note on what to do. Use type NONE only if the lead should be disqualified or left alone.
 ${DATA_RULES}`,
   },
   conversation_analysis: {

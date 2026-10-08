@@ -14,6 +14,7 @@ export function LeadAiPanel({
   analyzedAt,
   canRun,
   canConfigure,
+  canSchedule,
   timeZone,
 }: {
   leadId: string;
@@ -21,12 +22,14 @@ export function LeadAiPanel({
   analyzedAt: string | null;
   canRun: boolean;
   canConfigure: boolean;
+  canSchedule: boolean;
   timeZone: string;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [settingsLink, setSettingsLink] = useState(false);
+  const [scheduled, setScheduled] = useState(false);
 
   async function analyze() {
     setBusy(true);
@@ -43,7 +46,25 @@ export function LeadAiPanel({
     }
   }
 
+  /** The user approves the AI's proposal; it becomes an ordinary follow-up they can edit or cancel. */
+  async function schedule(next: NonNullable<LeadAnalysis['nextAction']>) {
+    setBusy(true);
+    setError(null);
+    try {
+      const when = new Date(Date.now() + Math.max(next.inHours * 3_600_000, 5 * 60_000));
+      await api(`/leads/${leadId}/followups`, { method: 'POST', body: { type: next.type, scheduledAt: when.toISOString(), notes: next.note } });
+      setScheduled(true);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not schedule the follow-up');
+      setSettingsLink(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!analysis && !canRun) return null;
+  const next = analysis?.nextAction && analysis.nextAction.type !== 'NONE' ? analysis.nextAction : null;
 
   return (
     <section aria-labelledby="ai-insight">
@@ -111,6 +132,24 @@ export function LeadAiPanel({
                     </div>
                   )}
                 </dl>
+              )}
+              {next && (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-zinc-200 px-3 py-2 dark:border-zinc-700">
+                  <p>
+                    <span className="font-medium">
+                      {title(next.type)} {next.inHours === 0 ? 'now' : next.inHours < 48 ? `in ${next.inHours}h` : `in ${Math.round(next.inHours / 24)} days`}
+                    </span>
+                    {next.note && <span className="text-zinc-600 dark:text-zinc-400"> — {next.note}</span>}
+                  </p>
+                  {canSchedule &&
+                    (scheduled ? (
+                      <span className="text-xs text-emerald-700 dark:text-emerald-400">Scheduled ✓</span>
+                    ) : (
+                      <Button variant="secondary" className="h-8" disabled={busy} onClick={() => schedule(next)}>
+                        Schedule it
+                      </Button>
+                    ))}
+                </div>
               )}
               <p className="text-xs text-zinc-500">
                 Why: {analysis.rationale}
