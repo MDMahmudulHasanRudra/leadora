@@ -26,3 +26,17 @@ export const createLeadSchema = z
   .object(leadFields)
   .refine((v) => v.email || v.phone, { message: 'Provide an email or a phone number', path: ['email'] });
 export type CreateLeadInput = z.infer<typeof createLeadSchema>;
+
+export const listLeadsSchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  cursor: z.string().max(200).optional(),
+  q: z.string().trim().min(1).max(100).optional(),
+  owner: z.union([z.literal('me'), z.literal('unassigned'), z.uuid()]).optional(),
+  stageId: z.uuid().optional(),
+  sourceId: z.uuid().optional(),
+  tag: z.string().trim().min(1).max(40).optional(),
+  priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional(),
+  temperature: z.enum(['COLD', 'WARM', 'HOT']).optional(),
+  archived: z.enum(['true', 'false']).default('false'),
+});
+export type ListLeadsQuery = z.infer<typeof listLeadsSchema>;

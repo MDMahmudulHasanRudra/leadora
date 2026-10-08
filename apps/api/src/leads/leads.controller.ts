@@ -1,9 +1,9 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { type AuthContext, CurrentAuth, RequirePermission } from '../auth/auth-context';
 import { ZodPipe } from '../common/zod.pipe';
 import { LeadReader } from './lead-reader.service';
-import { type CreateLeadInput, createLeadSchema } from './leads.schemas';
+import { type CreateLeadInput, createLeadSchema, type ListLeadsQuery, listLeadsSchema } from './leads.schemas';
 import { LeadsService } from './leads.service';
 
 const Id = new ParseUUIDPipe({ errorHttpStatusCode: 404 });
@@ -15,6 +15,12 @@ export class LeadsController {
     private readonly leads: LeadsService,
     private readonly reader: LeadReader,
   ) {}
+
+  @Get()
+  @RequirePermission('lead.view')
+  list(@CurrentAuth() auth: AuthContext, @Query(new ZodPipe(listLeadsSchema)) query: ListLeadsQuery) {
+    return this.leads.list(auth, query);
+  }
 
   @Post()
   @HttpCode(201)
