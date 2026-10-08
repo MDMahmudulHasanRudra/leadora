@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { Worker, type Job } from 'bullmq';
+import { Queue, Worker, type Job } from 'bullmq';
 import pino from 'pino';
 import { baseLoggerOptions, loadEnv } from '@leadora/config';
 import { createDb } from '@leadora/database';
@@ -10,6 +10,7 @@ import {
   processInboundEvent,
   processLeadImport,
   REALTIME_CHANNEL,
+  sendFollowupReminders,
 } from '@leadora/domain';
 import Redis from 'ioredis';
 import { handleLeadImport } from './handlers/lead-import';
@@ -33,6 +34,7 @@ const publish = async (organizationId: string, type: string, data: Record<string
 const handlers: Partial<Record<QueueName, Record<string, (job: Job) => Promise<unknown>>>> = {
   default: {
     'system.ping': async (job) => ({ pong: true, at: new Date().toISOString(), id: job.id }),
+    'followups.remind': async () => ({ reminded: await sendFollowupReminders(db, new Date()) }),
   },
   messages: {
     'message.send': (job) =>
@@ -75,6 +77,12 @@ const workers = (Object.keys(QUEUES) as QueueName[]).map((name) => {
   return worker;
 });
 
+// Every worker instance upserts the same scheduler id, so the job exists once cluster-wide.
+const scheduler = new Queue('default', { connection });
+void scheduler
+  .upsertJobScheduler('followup-reminders', { every: 60_000 }, { name: 'followups.remind' })
+  .catch((err: Error) => log.error({ err: err.message }, 'scheduler.failed'));
+
 const healthPort = Number(process.env.WORKER_HEALTH_PORT ?? 3002);
 const server = http.createServer((req, res) => {
   if (req.url === '/health/live') {
@@ -100,7 +108,7 @@ async function shutdown(signal: string) {
   shuttingDown = true;
   log.info({ signal }, 'worker.stopping');
   server.close();
-  await Promise.allSettled(workers.map((w) => w.close()));
+  await Promise.allSettled([...workers.map((w) => w.close()), scheduler.close()]);
   await pool.end();
   email?.close();
   publisher.disconnect();

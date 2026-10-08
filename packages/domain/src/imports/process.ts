@@ -1,6 +1,7 @@
 import { type Database, type LeadImportRowError, leadImports, type Transaction } from '@leadora/database';
 import { and, eq, sql } from 'drizzle-orm';
 import { DomainError } from '../errors';
+import { notify } from '../notifications';
 import { ingestLead } from '../leads/ingestion';
 import { createLeadSchema, PRIORITIES } from '../leads/schemas';
 import { type ImportMapping, parseCsv } from './csv';
@@ -116,10 +117,22 @@ export async function processLeadImport(db: Database, importId: string): Promise
     throw err;
   }
 
-  await db
+  const finished = await db
     .update(leadImports)
     .set({ status: 'COMPLETED', finishedAt: new Date() })
-    .where(and(eq(leadImports.id, importId), eq(leadImports.status, 'PROCESSING')));
+    .where(and(eq(leadImports.id, importId), eq(leadImports.status, 'PROCESSING')))
+    .returning({ imported: leadImports.importedCount, rows: leadImports.rowCount });
+  if (finished.length && imp.createdByUserId) {
+    await notify(db, {
+      organizationId: imp.organizationId,
+      userId: imp.createdByUserId,
+      type: 'import_completed',
+      title: `Import finished: ${imp.fileName}`,
+      body: `Imported ${finished[0]!.imported} of ${finished[0]!.rows} rows`,
+      link: `/leads/import?id=${importId}`,
+      data: { importId },
+    });
+  }
 }
 
 export async function markLeadImportFailed(db: Database, importId: string, message: string): Promise<void> {

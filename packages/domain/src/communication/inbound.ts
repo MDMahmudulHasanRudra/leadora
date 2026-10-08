@@ -3,6 +3,7 @@ import { and, desc, eq, inArray, ne } from 'drizzle-orm';
 import { z } from 'zod';
 import { ingestLead } from '../leads/ingestion';
 import { normalizeEmail } from '../leads/normalize';
+import { notify } from '../notifications';
 import { createLeadSchema } from '../leads/schemas';
 
 /** Generic inbound email webhook payload (what a mail relay posts to /webhooks/inbound/:inboxId). */
@@ -126,6 +127,18 @@ export async function processInboundEvent(db: Database, eventId: string): Promis
       type: 'message.received',
       payload: { channel: inbox.channel, conversationId: conversation!.id, messageId: message!.id },
     });
+    const notifyUserId = conversation!.assignedUserId ?? lead.ownerUserId;
+    if (notifyUserId) {
+      await notify(tx, {
+        organizationId,
+        userId: notifyUserId,
+        type: 'message_received',
+        title: `New message from ${mail.from.name || mail.from.email}`,
+        body: preview(mail.text),
+        link: `/inbox?c=${conversation!.id}`,
+        data: { conversationId: conversation!.id, leadId: lead.id },
+      });
+    }
     await markProcessed();
     return {
       status: 'PROCESSED',

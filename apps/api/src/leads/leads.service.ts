@@ -16,6 +16,7 @@ import {
   validateCustomFields,
   writeCustomFields,
   normalizePhoneOrThrow,
+  notifyLeadAssigned,
   pickOwnerByRules,
   resolveOwner,
   resolveSource,
@@ -167,6 +168,15 @@ export class LeadsService {
           activityRows.map((a) => ({ organizationId: auth.organizationId, leadId: id, actorUserId: auth.userId, ...a })),
         );
       }
+      if (patch.ownerUserId !== undefined) {
+        await notifyLeadAssigned(tx, {
+          organizationId: auth.organizationId,
+          leadId: id,
+          leadName: (patch.fullName as string | undefined) ?? current.fullName,
+          toUserId: patch.ownerUserId,
+          actorUserId: auth.userId,
+        });
+      }
       return this.reader.get(auth.organizationId, id, tx);
     });
   }
@@ -186,6 +196,14 @@ export class LeadsService {
       if (!pick) throw new UnprocessableEntityException({ code: 'NO_MATCHING_RULE', message: 'No assignment rule matches this lead' });
       if (pick.userId !== current.ownerUserId) {
         await tx.update(leads).set({ ownerUserId: pick.userId }).where(eq(leads.id, id));
+        await notifyLeadAssigned(tx, {
+          organizationId: auth.organizationId,
+          leadId: id,
+          leadName: current.fullName,
+          toUserId: pick.userId,
+          actorUserId: auth.userId,
+          rule: pick.ruleName,
+        });
         await tx.insert(activities).values({
           organizationId: auth.organizationId,
           leadId: id,

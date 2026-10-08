@@ -13,6 +13,7 @@ import {
 import { and, eq, inArray, ne, or, type SQL, sql } from 'drizzle-orm';
 import { loadCustomFieldDefinitions, validateCustomFields, writeCustomFields } from '../custom-fields/values';
 import { DomainError } from '../errors';
+import { notifyLeadAssigned } from '../notifications';
 import { pickOwnerByRules } from './assignment';
 import { normalizeEmail, normalizePhone } from './normalize';
 import type { CreateLeadInput } from './schemas';
@@ -106,6 +107,7 @@ export async function ingestLead(tx: Transaction, ctx: IngestContext, input: Cre
     type: 'lead.created',
     payload: { sourceType: source.type, stage: stage.key, ownerUserId, ...(assignmentRule ? { assignmentRule } : {}) },
   });
+  await notifyLeadAssigned(tx, { organizationId, leadId: lead!.id, leadName: input.fullName, toUserId: ownerUserId, actorUserId: ctx.actorUserId, rule: assignmentRule });
   return { status: 'CREATED', leadId: lead!.id };
 }
 
