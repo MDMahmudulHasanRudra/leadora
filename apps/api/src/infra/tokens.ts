@@ -10,3 +10,4 @@ export const EMBEDDINGS_QUEUE = Symbol('EMBEDDINGS_QUEUE');
 /** StorageProvider for uploads (local disk or S3-compatible). */
 export const STORAGE = Symbol('STORAGE');
 export const AUTOMATIONS_QUEUE = Symbol('AUTOMATIONS_QUEUE');
+export const WEBHOOKS_QUEUE = Symbol('WEBHOOKS_QUEUE');

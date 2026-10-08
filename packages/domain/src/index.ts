@@ -27,3 +27,4 @@ export * from './automation/events';
 export * from './automation/conditions';
 export * from './automation/actions';
 export * from './automation/engine';
+export * from './integrations/webhooks';

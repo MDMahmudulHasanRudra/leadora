@@ -65,7 +65,7 @@ export function assertFetchableUrl(raw: string, ports: string[] = ['80', '443'])
   return url;
 }
 
-type Lookup = typeof dnsLookup;
+export type Lookup = typeof dnsLookup;
 
 /** A `lookup` for http.request that refuses private destinations. Exported for tests. */
 export function guardedLookup(resolve: Lookup = dnsLookup): Lookup {
@@ -87,15 +87,32 @@ export interface FetchedPage {
   body: Buffer;
 }
 
-function requestOnce(url: URL, opts: { maxBytes: number; timeoutMs: number; userAgent: string; lookup: Lookup }) {
+interface RequestOpts {
+  maxBytes: number;
+  timeoutMs: number;
+  userAgent: string;
+  lookup: Lookup;
+  method?: 'GET' | 'POST';
+  headers?: Record<string, string>;
+  body?: string;
+  /** Keep the first maxBytes of an oversized response instead of failing (webhook responses are only logged). */
+  truncate?: boolean;
+}
+
+function requestOnce(url: URL, opts: RequestOpts) {
   return new Promise<{ status: number; headers: http.IncomingHttpHeaders; body: Buffer }>((resolve, reject) => {
     const lib = url.protocol === 'https:' ? https : http;
     const req = lib.request(
       url,
-      { method: 'GET', lookup: opts.lookup, timeout: opts.timeoutMs, headers: { 'user-agent': opts.userAgent, accept: 'text/html,text/plain;q=0.9,*/*;q=0.1' } },
+      {
+        method: opts.method ?? 'GET',
+        lookup: opts.lookup,
+        timeout: opts.timeoutMs,
+        headers: { 'user-agent': opts.userAgent, accept: 'text/html,text/plain;q=0.9,*/*;q=0.1', ...opts.headers },
+      },
       (res) => {
         const declared = Number(res.headers['content-length'] ?? 0);
-        if (declared > opts.maxBytes) {
+        if (declared > opts.maxBytes && !opts.truncate) {
           res.destroy();
           return reject(new DomainError('invalid', 'URL_TOO_LARGE', 'The page is too large to import'));
         }
@@ -105,7 +122,8 @@ function requestOnce(url: URL, opts: { maxBytes: number; timeoutMs: number; user
           size += c.length;
           if (size > opts.maxBytes) {
             res.destroy();
-            reject(new DomainError('invalid', 'URL_TOO_LARGE', 'The page is too large to import'));
+            if (opts.truncate) resolve({ status: res.statusCode ?? 0, headers: res.headers, body: Buffer.concat(parts) });
+            else reject(new DomainError('invalid', 'URL_TOO_LARGE', 'The page is too large to import'));
           } else parts.push(c);
         });
         res.on('end', () => resolve({ status: res.statusCode ?? 0, headers: res.headers, body: Buffer.concat(parts) }));
@@ -114,7 +132,7 @@ function requestOnce(url: URL, opts: { maxBytes: number; timeoutMs: number; user
     );
     req.on('timeout', () => req.destroy(new DomainError('upstream', 'URL_TIMEOUT', 'The page took too long to respond')));
     req.on('error', (err) => reject(err instanceof DomainError ? err : new DomainError('upstream', 'URL_FETCH_FAILED', `Could not fetch the page: ${err.message}`)));
-    req.end();
+    req.end(opts.body);
   });
 }
 
@@ -139,6 +157,29 @@ export async function safeFetch(
     return { url: url.toString(), contentType: String(res.headers['content-type'] ?? ''), body: res.body };
   }
   throw new DomainError('upstream', 'URL_FETCH_FAILED', 'Too many redirects');
+}
+
+/**
+ * SSRF-safe POST for outbound webhooks: same address checks as safeFetch, redirects are not followed
+ * (a webhook that redirects is a failed delivery), and only the start of the response is kept.
+ */
+export async function safePost(
+  raw: string,
+  body: string,
+  opts: { headers?: Record<string, string>; timeoutMs?: number; lookup?: Lookup; ports?: string[] } = {},
+): Promise<{ status: number; body: string }> {
+  const url = assertFetchableUrl(raw, opts.ports);
+  const res = await requestOnce(url, {
+    method: 'POST',
+    body,
+    headers: { 'content-type': 'application/json', 'content-length': String(Buffer.byteLength(body)), ...opts.headers },
+    maxBytes: 2048,
+    truncate: true,
+    timeoutMs: opts.timeoutMs ?? 10_000,
+    userAgent: 'Leadora-Webhooks/1.0',
+    lookup: opts.lookup ?? guardedLookup(),
+  });
+  return { status: res.status, body: res.body.toString('utf8') };
 }
 
 /** Minimal robots.txt check for our user agent or "*" (spec §79: respect robots where applicable). */

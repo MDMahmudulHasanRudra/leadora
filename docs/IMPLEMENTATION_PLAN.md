@@ -119,7 +119,7 @@ Follow-ups noted, not done:
 
 ## Phase 7 — Integrations
 
-Slices: (1) API keys · (2) signed outbound webhooks · (3) public lead form · (4) website chat · (5) WhatsApp / Messenger / Instagram adapters · (6) email delivery tracking.
+Slices: (1) API keys ✅ · (2) signed outbound webhooks ✅ · (3) public lead form · (4) website chat · (5) WhatsApp / Messenger / Instagram adapters · (6) email delivery tracking.
 
 ### Decisions
 

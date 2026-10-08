@@ -17,6 +17,7 @@ import { and, asc, eq, gte, isNull, lt, sql } from 'drizzle-orm';
 import { DomainError } from '../errors';
 import { type ActionInput, actionSchema, applyAction, type AutomationDeps, prepareAction } from './actions';
 import { evaluateConditions, type Facts } from './conditions';
+import { fanOutWebhooks } from '../integrations/webhooks';
 import { EVENT_TYPES, emitEvent, setEventCause } from './events';
 
 export const TRIGGERS = [...EVENT_TYPES, 'lead.inactive'] as const;
@@ -115,8 +116,12 @@ async function createRun(
  * Claims a batch of outbox events (SKIP LOCKED, so parallel workers never share one), matches enabled rules,
  * evaluates conditions and creates runs. Runs are enqueued only after the claim commits.
  */
-export async function dispatchEvents(db: Database, opts: { enqueueRun: (runId: string) => Promise<void>; batch?: number; rulesEnabled?: boolean }) {
+export async function dispatchEvents(
+  db: Database,
+  opts: { enqueueRun: (runId: string) => Promise<void>; enqueueDelivery?: (deliveryId: string) => Promise<void>; batch?: number; rulesEnabled?: boolean },
+) {
   const runIds: string[] = [];
+  const deliveryIds: string[] = [];
   const count = await db.transaction(async (tx) => {
     const events = await tx
       .select()
@@ -151,12 +156,15 @@ export async function dispatchEvents(db: Database, opts: { enqueueRun: (runId: s
           if (id) runIds.push(id);
         }
       }
+      // Spec §93: the same outbox feeds outbound webhooks, including events caused by automations.
+      deliveryIds.push(...(await fanOutWebhooks(tx, e)));
       await tx.update(domainEvents).set({ processedAt: new Date() }).where(eq(domainEvents.id, e.id));
     }
     return events.length;
   });
   for (const id of runIds) await opts.enqueueRun(id);
-  return { events: count, runs: runIds };
+  for (const id of deliveryIds) await opts.enqueueDelivery?.(id);
+  return { events: count, runs: runIds, deliveries: deliveryIds };
 }
 
 /** Spec §40 `followup.overdue`: one event per follow-up, the first time it is found overdue. */

@@ -20,3 +20,4 @@ export * from './scoring';
 export * from './knowledge';
 export * from './automation';
 export * from './api-keys';
+export * from './webhooks';

@@ -8,6 +8,7 @@ import {
   type ChannelProviders,
   automationRunJob,
   deliverMessage,
+  deliverWebhook,
   dispatchEvents,
   dispatchInactiveLeads,
   emitOverdueFollowupEvents,
@@ -21,7 +22,9 @@ import {
   organizationsNeedingRescore,
   rescoreOrganization,
   sendFollowupReminders,
+  stalePendingDeliveries,
   staleQueuedRuns,
+  webhookDeliveryJob,
 } from '@leadora/domain';
 import { createStorage } from '@leadora/storage';
 import Redis from 'ioredis';
@@ -50,6 +53,11 @@ const aiDeps = {
 };
 const automationsQueue = new Queue('automations', { connection });
 const messagesQueue = new Queue('messages', { connection });
+const webhooksQueue = new Queue('webhooks', { connection });
+const enqueueDelivery = async (deliveryId: string) => {
+  const job = webhookDeliveryJob(deliveryId);
+  await webhooksQueue.add(job.name, job.data, job.opts);
+};
 const enqueueRun = async (runId: string) => {
   const job = automationRunJob(runId);
   await automationsQueue.add(job.name, job.data, job.opts);
@@ -93,16 +101,21 @@ const handlers: Partial<Record<QueueName, Record<string, (job: Job) => Promise<u
   },
   automations: {
     // Spec §40-41: outbox → rules → runs. Runs on every instance; SKIP LOCKED keeps them from sharing events.
-    'events.dispatch': () => dispatchEvents(db, { enqueueRun, rulesEnabled: env.ENABLE_AUTOMATION }),
+    'events.dispatch': () => dispatchEvents(db, { enqueueRun, enqueueDelivery, rulesEnabled: env.ENABLE_AUTOMATION }),
     'automation.run': (job) => executeRun(db, automationDeps, job.data.runId, { finalAttempt: isFinal(job) }),
     'automations.sweep': async () => {
       const overdue = await emitOverdueFollowupEvents(db);
       const stale = await staleQueuedRuns(db);
       for (const id of stale) await enqueueRun(id);
-      return { overdue, requeued: stale.length };
+      const staleDeliveries = await stalePendingDeliveries(db);
+      for (const id of staleDeliveries) await enqueueDelivery(id);
+      return { overdue, requeued: stale.length + staleDeliveries.length };
     },
     'automations.inactive': async () => ({ runs: env.ENABLE_AUTOMATION ? (await dispatchInactiveLeads(db, { enqueueRun })).length : 0 }),
     'events.purge': async () => ({ purged: await purgeProcessedEvents(db) }),
+  },
+  webhooks: {
+    'webhook.deliver': (job) => deliverWebhook(db, job.data.deliveryId, { encryptionKey: env.DATA_ENCRYPTION_KEY, finalAttempt: isFinal(job) }),
   },
   imports: {
     'lead.import': (job) =>
@@ -180,7 +193,7 @@ async function shutdown(signal: string) {
   shuttingDown = true;
   log.info({ signal }, 'worker.stopping');
   server.close();
-  await Promise.allSettled([...workers.map((w) => w.close()), scheduler.close(), automationsQueue.close(), messagesQueue.close()]);
+  await Promise.allSettled([...workers.map((w) => w.close()), scheduler.close(), automationsQueue.close(), messagesQueue.close(), webhooksQueue.close()]);
   await pool.end();
   email?.close();
   publisher.disconnect();

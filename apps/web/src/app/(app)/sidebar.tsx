@@ -37,6 +37,8 @@ const SECTIONS: { title?: string; items: NavItem[] }[] = [
       { label: 'Lead scoring', href: '/settings/scoring', permission: 'settings.manage' },
       { label: 'Inboxes', href: '/settings/inboxes', permission: 'settings.manage' },
       { label: 'AI settings', href: '/settings/ai', permission: 'ai.configure' },
+      { label: 'Webhooks', href: '/settings/webhooks', permission: 'settings.manage' },
+      { label: 'API keys', href: '/settings/api-keys', permission: 'settings.manage' },
     ],
   },
 ];

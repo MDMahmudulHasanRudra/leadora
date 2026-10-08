@@ -9,6 +9,7 @@ export const QUEUES = {
   automations: { concurrency: 3 },
   embeddings: { concurrency: 2 },
   analytics: { concurrency: 1 },
+  webhooks: { concurrency: 5 },
 } as const;
 
 export type QueueName = keyof typeof QUEUES;

@@ -19,6 +19,7 @@ import { AiModule } from './ai/ai.module';
 import { ScoringModule } from './scoring/scoring.module';
 import { KnowledgeModule } from './knowledge/knowledge.module';
 import { AutomationsModule } from './automations/automations.module';
+import { WebhooksModule } from './webhooks/webhooks.module';
 import { LeadsModule } from './leads/leads.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { TeamsModule } from './teams/teams.module';
@@ -49,6 +50,7 @@ import { UsersModule } from './users/users.module';
     ScoringModule,
     KnowledgeModule,
     AutomationsModule,
+    WebhooksModule,
   ],
 })
 export class AppModule {}
