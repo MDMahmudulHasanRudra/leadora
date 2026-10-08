@@ -3,11 +3,11 @@ import { redirect } from 'next/navigation';
 import { Card, formatDateTime, PageHeader } from '@/components/ui';
 import { getIdentity, requireData } from '@/lib/api-server';
 import { type Lead, type Page, type Pipeline, PRIORITIES, type UserRow } from '@/lib/types';
-import { PriorityBadge, StageBadge, titleCase } from './lead-bits';
+import { PriorityBadge, ScoreBadge, StageBadge, titleCase } from './lead-bits';
 
 export const dynamic = 'force-dynamic';
 
-const FILTERS = ['q', 'owner', 'stageId', 'priority', 'tag', 'archived', 'cursor'] as const;
+const FILTERS = ['q', 'owner', 'stageId', 'priority', 'temperature', 'tag', 'archived', 'cursor'] as const;
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 const selectClass =
@@ -100,6 +100,12 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
             </option>
           ))}
         </select>
+        <select name="temperature" defaultValue={params.get('temperature') ?? ''} aria-label="Temperature" className={selectClass}>
+          <option value="">Any temperature</option>
+          <option value="HOT">Hot</option>
+          <option value="WARM">Warm</option>
+          <option value="COLD">Cold</option>
+        </select>
         <select name="archived" defaultValue={params.get('archived') ?? ''} aria-label="Archived" className={selectClass}>
           <option value="">Active</option>
           <option value="true">Archived</option>
@@ -124,6 +130,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
             <thead className="border-b border-zinc-200 text-left text-xs text-zinc-500 dark:border-zinc-800">
               <tr>
                 <th className="px-4 py-3 font-medium">Lead</th>
+                <th className="px-4 py-3 font-medium">Score</th>
                 <th className="px-4 py-3 font-medium">Stage</th>
                 <th className="px-4 py-3 font-medium">Owner</th>
                 <th className="px-4 py-3 font-medium">Priority</th>
@@ -149,6 +156,9 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
                         ))}
                       </div>
                     )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <ScoreBadge score={lead.score} temperature={lead.temperature} />
                   </td>
                   <td className="px-4 py-3">
                     <StageBadge stage={lead.stage} />

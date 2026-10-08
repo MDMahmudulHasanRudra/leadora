@@ -16,3 +16,4 @@ export * from './assignment-rules';
 export * from './conversations';
 export * from './notifications';
 export * from './ai';
+export * from './scoring';

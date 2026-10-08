@@ -21,13 +21,14 @@ import {
   encryptSecret,
   estimateCostUsd,
   monthToDateSpendUsd,
+  rescoreLeads,
   runStructured,
 } from '@leadora/domain';
 import { and, asc, desc, eq, gte, inArray, max, sql } from 'drizzle-orm';
 import type { AuthContext } from '../auth/auth-context';
 import { AI_PROVIDER_FACTORY, DB, ENV } from '../infra/tokens';
 import { LeadReader } from '../leads/lead-reader.service';
-import { DEFAULT_FEATURES, leadAnalysisSchema, type PromptVersionInput, temperatureFor, type UpdateSettingsInput } from './ai.schemas';
+import { DEFAULT_FEATURES, leadAnalysisSchema, type PromptVersionInput, type UpdateSettingsInput } from './ai.schemas';
 
 type ProviderFactory = (provider: string, apiKey: string) => AiProvider;
 
@@ -187,16 +188,25 @@ export class AiService {
       { organizationId: auth.organizationId, userId: auth.userId },
       { purpose: 'lead_analysis', promptKey: 'lead_analysis', schema: leadAnalysisSchema, input, entity: { type: 'lead', id: leadId } },
     );
-    const temperature = temperatureFor(data.score);
     await this.handle.db.transaction(async (tx) => {
       await tx.insert(aiAnalyses).values({ organizationId: auth.organizationId, entityType: 'lead', entityId: leadId, purpose: 'lead_analysis', runId, result: data });
-      await tx.update(leads).set({ score: data.score, temperature }).where(eq(leads.id, leadId));
+      // The AI score is one input to the hybrid score (spec §14), never the score itself.
+      await tx.update(leads).set({ aiScore: data.score }).where(eq(leads.id, leadId));
+      await rescoreLeads(tx, auth.organizationId, [leadId]);
+      const [after] = await tx.select({ score: leads.score, temperature: leads.temperature }).from(leads).where(eq(leads.id, leadId));
       await tx.insert(activities).values({
         organizationId: auth.organizationId,
         leadId,
         actorUserId: auth.userId,
         type: 'ai.analysis_completed',
-        payload: { score: data.score, previousScore: lead.score, temperature, intent: data.intent, recommendedAction: data.recommendedAction },
+        payload: {
+          score: data.score,
+          leadScore: after!.score,
+          previousScore: lead.score,
+          temperature: after!.temperature,
+          intent: data.intent,
+          recommendedAction: data.recommendedAction,
+        },
       });
     });
     return data;

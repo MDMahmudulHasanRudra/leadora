@@ -145,7 +145,8 @@ describe('AI foundation: settings, gateway, prompts, usage', () => {
     expect(req.input).toContain('Needs 300 units');
 
     const updated = (await admin.get(`/api/v1/leads/${lead.id}`).expect(200)).body;
-    expect(updated).toMatchObject({ score: 88, temperature: 'HOT' });
+    // Hybrid (spec §14): business email = 20 rule points, blended 50/50 with the AI's 88.
+    expect(updated).toMatchObject({ aiScore: 88, ruleScore: 20, score: 54, temperature: 'WARM' });
     expect((await admin.get(`/api/v1/ai/leads/${lead.id}/analysis`).expect(200)).body.result.summary).toContain('300 units');
     const { body: acts } = await admin.get(`/api/v1/leads/${lead.id}/activities`).expect(200);
     expect(acts.items[0]).toMatchObject({ type: 'ai.analysis_completed', payload: { score: 88 } });
@@ -166,7 +167,7 @@ describe('AI foundation: settings, gateway, prompts, usage', () => {
 
     fake.reply(analysis({ score: 999 }), analysis({ intent: 'BANANA' }));
     expect((await analyze(admin, lead.id).expect(502)).body.error.code).toBe('AI_INVALID_OUTPUT');
-    expect((await admin.get(`/api/v1/leads/${lead.id}`).expect(200)).body.score).toBe(40);
+    expect((await admin.get(`/api/v1/leads/${lead.id}`).expect(200)).body.aiScore).toBe(40);
 
     const { rows } = await t.db.execute<{ status: string; attempts: number }>(sql`select status, attempts from ai_runs order by created_at`);
     expect(rows).toEqual([

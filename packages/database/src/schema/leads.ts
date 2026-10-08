@@ -23,6 +23,14 @@ import { users } from './users';
 export const leadPriority = pgEnum('lead_priority', ['LOW', 'MEDIUM', 'HIGH', 'URGENT']);
 export const leadTemperature = pgEnum('lead_temperature', ['COLD', 'WARM', 'HOT']);
 
+export interface ScoreBreakdown {
+  rules: { key: string; points: number }[];
+  ruleScore: number;
+  aiScore: number | null;
+  ruleWeight: number;
+  aiWeight: number;
+}
+
 // Millisecond precision so (created_at, id) keyset cursors round-trip exactly through JS Dates.
 const ms = { withTimezone: true, precision: 3 } as const;
 
@@ -49,8 +57,13 @@ export const leads = pgTable(
       .notNull()
       .references(() => pipelineStages.id, { onDelete: 'restrict' }),
     ownerUserId: uuid().references(() => users.id, { onDelete: 'set null' }),
+    // Spec §14: score = weighted blend of ruleScore and aiScore; breakdown explains it.
     score: integer(),
     temperature: leadTemperature(),
+    ruleScore: integer(),
+    aiScore: integer(),
+    scoreBreakdown: jsonb().$type<ScoreBreakdown>(),
+    scoredAt: timestamp(ms),
     priority: leadPriority().notNull().default('MEDIUM'),
     location: text(),
     country: varchar({ length: 2 }),

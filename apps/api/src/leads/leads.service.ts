@@ -20,6 +20,7 @@ import {
   pickOwnerByRules,
   resolveOwner,
   resolveSource,
+  rescoreLeads,
   resolveStage,
   setLeadTags,
 } from '@leadora/domain';
@@ -177,6 +178,7 @@ export class LeadsService {
           actorUserId: auth.userId,
         });
       }
+      if (Object.keys(changes).length) await rescoreLeads(tx, auth.organizationId, [id]);
       return this.reader.get(auth.organizationId, id, tx);
     });
   }

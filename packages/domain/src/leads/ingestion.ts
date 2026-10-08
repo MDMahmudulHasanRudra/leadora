@@ -17,6 +17,7 @@ import { notifyLeadAssigned } from '../notifications';
 import { pickOwnerByRules } from './assignment';
 import { normalizeEmail, normalizePhone } from './normalize';
 import type { CreateLeadInput } from './schemas';
+import { rescoreLeads } from '../scoring/rescore';
 
 export type IngestResult =
   | { status: 'CREATED'; leadId: string }
@@ -108,6 +109,7 @@ export async function ingestLead(tx: Transaction, ctx: IngestContext, input: Cre
     payload: { sourceType: source.type, stage: stage.key, ownerUserId, ...(assignmentRule ? { assignmentRule } : {}) },
   });
   await notifyLeadAssigned(tx, { organizationId, leadId: lead!.id, leadName: input.fullName, toUserId: ownerUserId, actorUserId: ctx.actorUserId, rule: assignmentRule });
+  await rescoreLeads(tx, organizationId, [lead!.id]);
   return { status: 'CREATED', leadId: lead!.id };
 }
 

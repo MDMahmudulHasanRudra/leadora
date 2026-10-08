@@ -13,3 +13,5 @@ export * from './communication/realtime';
 export * from './communication/inbound';
 export * from './imports/csv';
 export * from './imports/process';
+export * from './scoring/rules';
+export * from './scoring/rescore';

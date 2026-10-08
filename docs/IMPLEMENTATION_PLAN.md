@@ -117,6 +117,23 @@ Follow-ups noted, not done:
 - Uploaded CSV content is stored in Postgres (≤ 5 MB); move it to object storage when the storage provider lands, and purge it after the import finishes.
 - Import retries are safe, but the stale-job case (worker killed mid-row with no retry left) leaves status `PROCESSING`; a periodic sweeper should mark old ones `FAILED`.
 
+## Phase 4 — AI sales intelligence
+
+Slices: (1) hybrid scoring ✅ · (2) conversation analysis + summary · (3) reply assistant · (4) next action · (5) natural-language CRM search.
+
+### Decisions
+
+- **Hybrid scoring** (spec §14–15): pure rule engine in `packages/domain/scoring` (business email, phone, budget, inbound message, pricing/demo intent in English and Bangla, reply within 24h, no response after 2+ touches). Points, the rule/AI blend and the temperature thresholds are org settings; only overrides are stored, so new rules reach existing orgs. Leads keep `rule_score`, `ai_score` and a `score_breakdown`, so every score is explainable in the UI.
+- **When scores move:** `rescoreLeads` runs in the same transaction as every change that can affect it (create/import/inbound lead, edit, message sent or received, follow-up completed, AI analysis). It is cheap and idempotent. A settings change queues one `scoring.rescore_org` job (deduped by jobId). On boot the worker queues any org with unscored leads, which backfills leads that predate scoring.
+- **AI never sets the score directly:** an analysis writes `ai_score`, and the blend decides. Setting the AI weight to 0 gives rules-only scoring.
+
+### Threat model additions
+
+| Threat | Abuse case | Mitigation | Test |
+| --- | --- | --- | --- |
+| Elevation | Agent games scoring to jump the queue | scoring settings need `settings.manage` | agent → 403 |
+| Tampering | Customer writes "price" to inflate a score | rules are capped and explainable; managers see the breakdown | breakdown lists every rule applied |
+
 ## Phase 3 — AI foundation
 
 ### Decisions

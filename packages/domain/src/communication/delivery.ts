@@ -1,5 +1,6 @@
 import { activities, conversations, type Database, inboxes, leads, messages } from '@leadora/database';
 import { and, asc, eq, isNotNull } from 'drizzle-orm';
+import { rescoreLeads } from '../scoring/rescore';
 
 export type ChannelKind = (typeof inboxes.$inferSelect)['channel'];
 
@@ -93,6 +94,7 @@ export async function deliverMessage(
       type: 'message.sent',
       payload: { channel: row.inbox.channel, conversationId: row.conversation.id, messageId },
     });
+    await rescoreLeads(tx, row.message.organizationId, [row.lead.id]);
   });
   return { status: 'SENT', conversationId: row.conversation.id, organizationId: row.message.organizationId };
 }

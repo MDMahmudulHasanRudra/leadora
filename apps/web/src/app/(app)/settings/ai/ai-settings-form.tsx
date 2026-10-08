@@ -174,15 +174,16 @@ export function AiSettingsForm({ settings }: { settings: AiSettings }) {
                       <td className="py-1 pr-3 font-mono text-xs">{m}</td>
                       {(['input', 'cachedInput', 'output'] as const).map((k) => (
                         <td key={k} className="py-1 pr-3">
-                          <Input
-                            type="number"
-                            min={0}
-                            step="0.001"
-                            aria-label={`${m} ${k} price`}
-                            value={prices[m]?.[k] ?? ''}
-                            onChange={(e) => setPrice(m, k, e.target.value)}
-                            className="w-28"
-                          />
+                          <div className="w-28">
+                            <Input
+                              type="number"
+                              min={0}
+                              step="0.001"
+                              aria-label={`${m} ${k} price`}
+                              value={prices[m]?.[k] ?? ''}
+                              onChange={(e) => setPrice(m, k, e.target.value)}
+                            />
+                          </div>
                         </td>
                       ))}
                     </tr>
@@ -202,7 +203,9 @@ export function AiSettingsForm({ settings }: { settings: AiSettings }) {
             htmlFor="budget"
             hint={`Spent this month: $${settings.monthToDateSpendUsd.toFixed(4)}. Calls stop when the budget is used up. Leave empty for no limit.`}
           >
-            <Input id="budget" name="budget" type="number" min={0} step="0.01" defaultValue={settings.monthlyBudgetUsd ?? ''} className="w-40" />
+            <div className="w-40">
+              <Input id="budget" name="budget" type="number" min={0} step="0.01" defaultValue={settings.monthlyBudgetUsd ?? ''} />
+            </div>
           </Field>
         </div>
         <div className="space-y-3">

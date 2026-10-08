@@ -96,6 +96,9 @@ export interface Lead {
   budget: number | null;
   priority: Priority;
   score: number | null;
+  ruleScore: number | null;
+  aiScore: number | null;
+  scoreBreakdown: { rules: { key: string; points: number }[]; ruleScore: number; aiScore: number | null; ruleWeight: number; aiWeight: number } | null;
   contactId: string | null;
   companyId: string | null;
   nextFollowupAt: string | null;
@@ -267,4 +270,11 @@ export interface LeadAnalysis {
   productInterest: string[];
   recommendedAction: string;
   rationale: string;
+}
+export interface ScoringSettings {
+  ruleWeight: number;
+  aiWeight: number;
+  hotThreshold: number;
+  warmThreshold: number;
+  rules: { key: string; label: string; enabled: boolean; points: number }[];
 }

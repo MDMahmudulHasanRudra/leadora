@@ -112,7 +112,7 @@ export function LeadAiPanel({
           <div className="grid gap-5 md:grid-cols-[auto_1fr]">
             <div className="flex items-center gap-4 md:flex-col md:items-start md:border-r md:border-zinc-100 md:pr-6 dark:md:border-zinc-800">
               <div>
-                <p className="text-xs text-zinc-500">Score</p>
+                <p className="text-xs text-zinc-500">AI score</p>
                 <p className="text-3xl font-semibold tabular-nums">
                   {analysis.score}
                   <span className="text-base font-normal text-zinc-400">/100</span>

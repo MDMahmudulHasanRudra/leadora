@@ -34,6 +34,7 @@ const SECTIONS: { title?: string; items: NavItem[] }[] = [
       { label: 'Audit log', href: '/audit', permission: 'audit.view' },
       { label: 'Custom fields', href: '/settings/fields', permission: 'settings.manage' },
       { label: 'Assignment rules', href: '/settings/assignment', permission: 'settings.manage' },
+      { label: 'Lead scoring', href: '/settings/scoring', permission: 'settings.manage' },
       { label: 'Inboxes', href: '/settings/inboxes', permission: 'settings.manage' },
       { label: 'AI settings', href: '/settings/ai', permission: 'ai.configure' },
     ],

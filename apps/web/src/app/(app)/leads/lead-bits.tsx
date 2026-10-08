@@ -1,5 +1,5 @@
 import { Badge } from '@/components/ui';
-import type { Priority, Stage } from '@/lib/types';
+import type { Lead, Priority, Stage } from '@/lib/types';
 
 export function StageBadge({ stage }: { stage: Pick<Stage, 'name' | 'color'> }) {
   return (
@@ -16,3 +16,15 @@ export function PriorityBadge({ priority }: { priority: Priority }) {
 }
 
 export const titleCase = (s: string) => s.charAt(0) + s.slice(1).toLowerCase();
+
+/** Score with its temperature as text, so meaning never rests on color alone. */
+export function ScoreBadge({ score, temperature }: Pick<Lead, 'score' | 'temperature'>) {
+  if (score === null) return <span className="text-zinc-400">—</span>;
+  const tone = temperature === 'HOT' ? 'red' : temperature === 'WARM' ? 'brand' : 'neutral';
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+      <span className="w-6 text-right font-medium tabular-nums">{score}</span>
+      {temperature && <Badge tone={tone}>{temperature.toLowerCase()}</Badge>}
+    </span>
+  );
+}

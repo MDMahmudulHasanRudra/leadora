@@ -64,7 +64,3 @@ export const DEFAULT_FEATURES = {
   nlSearch: true,
   autoReply: false,
 };
-
-export function temperatureFor(score: number): 'HOT' | 'WARM' | 'COLD' {
-  return score >= 80 ? 'HOT' : score >= 50 ? 'WARM' : 'COLD';
-}

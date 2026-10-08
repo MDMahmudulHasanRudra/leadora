@@ -10,6 +10,8 @@ import {
   processInboundEvent,
   processLeadImport,
   REALTIME_CHANNEL,
+  organizationsNeedingRescore,
+  rescoreOrganization,
   sendFollowupReminders,
 } from '@leadora/domain';
 import Redis from 'ioredis';
@@ -35,6 +37,7 @@ const handlers: Partial<Record<QueueName, Record<string, (job: Job) => Promise<u
   default: {
     'system.ping': async (job) => ({ pong: true, at: new Date().toISOString(), id: job.id }),
     'followups.remind': async () => ({ reminded: await sendFollowupReminders(db, new Date()) }),
+    'scoring.rescore_org': async (job) => ({ changed: await rescoreOrganization(db, job.data.organizationId) }),
   },
   messages: {
     'message.send': (job) =>
@@ -83,6 +86,14 @@ const scheduler = new Queue('default', { connection });
 void scheduler
   .upsertJobScheduler('followup-reminders', { every: 60_000 }, { name: 'followups.remind' })
   .catch((err: Error) => log.error({ err: err.message }, 'scheduler.failed'));
+
+// Leads that predate scoring (or a failed rescore) have no scored_at; queue their orgs once on boot.
+// The jobId dedupes across worker instances.
+void organizationsNeedingRescore(db)
+  .then((orgs) =>
+    Promise.all(orgs.map((organizationId) => scheduler.add('scoring.rescore_org', { organizationId }, { jobId: `rescore-${organizationId}`, removeOnComplete: true }))),
+  )
+  .catch((err: Error) => log.error({ err: err.message }, 'scoring.backfill_failed'));
 
 const healthPort = Number(process.env.WORKER_HEALTH_PORT ?? 3002);
 const server = http.createServer((req, res) => {

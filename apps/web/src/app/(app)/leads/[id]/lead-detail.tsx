@@ -7,6 +7,7 @@ import { FollowupList } from '@/components/followup-list';
 import { TaskList } from '@/components/task-list';
 import { Alert, Button, Card, formatDateTime, Input, Select } from '@/components/ui';
 import { api, ApiError } from '@/lib/api-client';
+import { RULE_SHORT_LABELS, temperatureLabel } from '@/lib/scoring';
 import { formatCustomValue } from '@/components/custom-field-input';
 import { type Activity, type CustomFieldDef, FOLLOWUP_TYPES, type Followup, type Lead, type LeadAnalysis, type Stage, type Task } from '@/lib/types';
 import { NewTaskForm } from '../../tasks/new-task-form';
@@ -15,6 +16,44 @@ import { PriorityBadge, StageBadge } from '../lead-bits';
 import { ACTION_LABELS, LeadAiPanel } from './lead-ai-panel';
 
 type Person = { id: string; fullName: string; active: boolean };
+
+/** Spec §14: the score is explainable — show what produced it. */
+function ScoreSummary({ lead }: { lead: Lead }) {
+  const b = lead.scoreBreakdown;
+  const blended = b && b.aiScore !== null && b.aiWeight > 0;
+  return (
+    <div>
+      <p className="text-xs text-zinc-500">Score</p>
+      <p className="mt-0.5 text-sm">
+        <span className="text-lg font-semibold tabular-nums">{lead.score}</span>
+        <span className="text-zinc-400">/100</span> {lead.temperature && <span className="font-medium">· {temperatureLabel(lead.temperature)}</span>}
+      </p>
+      {b && (
+        <details className="mt-1 text-xs text-zinc-500">
+          <summary className="cursor-pointer select-none hover:text-zinc-800 dark:hover:text-zinc-200">Why this score</summary>
+          <ul className="mt-1.5 space-y-0.5">
+            {b.rules.length === 0 && <li>No rule signals yet</li>}
+            {b.rules.map((r) => (
+              <li key={r.key} className="flex justify-between gap-2">
+                <span>{RULE_SHORT_LABELS[r.key] ?? r.key}</span>
+                <span className="tabular-nums">{r.points > 0 ? `+${r.points}` : r.points}</span>
+              </li>
+            ))}
+            <li className="flex justify-between gap-2 border-t border-zinc-100 pt-0.5 font-medium dark:border-zinc-800">
+              <span>Rule score</span>
+              <span className="tabular-nums">{b.ruleScore}</span>
+            </li>
+            {blended && (
+              <li className="pt-1">
+                Blended with AI score {b.aiScore} ({b.ruleWeight}% rules · {b.aiWeight}% AI)
+              </li>
+            )}
+          </ul>
+        </details>
+      )}
+    </div>
+  );
+}
 
 interface Props {
   lead: Lead;
@@ -87,7 +126,7 @@ export function LeadDetail({ lead, activities, followups, tasks, customFields, s
       case 'note.added':
         return 'added a note';
       case 'ai.analysis_completed':
-        return `ran an AI analysis: score ${p.score}${p.recommendedAction ? `, suggested “${ACTION_LABELS[String(p.recommendedAction)] ?? p.recommendedAction}”` : ''}`;
+        return `ran an AI analysis: AI score ${p.score}${p.recommendedAction ? `, suggested “${ACTION_LABELS[String(p.recommendedAction)] ?? p.recommendedAction}”` : ''}`;
       case 'followup.created':
         return `scheduled a ${String(p.type).toLowerCase()} for ${formatDateTime(String(p.scheduledAt), timeZone)}`;
       case 'followup.completed':
@@ -159,12 +198,6 @@ export function LeadDetail({ lead, activities, followups, tasks, customFields, s
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <StageBadge stage={lead.stage} />
               <PriorityBadge priority={lead.priority} />
-              {lead.score !== null && (
-                <span className="text-xs text-zinc-500 tabular-nums">
-                  Score {lead.score}
-                  {lead.temperature && ` · ${lead.temperature.charAt(0)}${lead.temperature.slice(1).toLowerCase()}`}
-                </span>
-              )}
               {archived && <span className="text-xs font-medium text-red-600">Archived</span>}
             </div>
           </div>
@@ -308,6 +341,7 @@ export function LeadDetail({ lead, activities, followups, tasks, customFields, s
           </Card>
 
           <Card className="space-y-4 p-5">
+            {lead.score !== null && <ScoreSummary lead={lead} />}
             <div>
               <label htmlFor="stage" className="text-xs text-zinc-500">
                 Stage

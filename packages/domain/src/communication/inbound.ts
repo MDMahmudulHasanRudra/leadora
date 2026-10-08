@@ -5,6 +5,7 @@ import { ingestLead } from '../leads/ingestion';
 import { normalizeEmail } from '../leads/normalize';
 import { notify } from '../notifications';
 import { createLeadSchema } from '../leads/schemas';
+import { rescoreLeads } from '../scoring/rescore';
 
 /** Generic inbound email webhook payload (what a mail relay posts to /webhooks/inbound/:inboxId). */
 export const inboundEmailSchema = z.object({
@@ -139,6 +140,7 @@ export async function processInboundEvent(db: Database, eventId: string): Promis
         data: { conversationId: conversation!.id, leadId: lead.id },
       });
     }
+    await rescoreLeads(tx, organizationId, [lead.id]);
     await markProcessed();
     return {
       status: 'PROCESSED',

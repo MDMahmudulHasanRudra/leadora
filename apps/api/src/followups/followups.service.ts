@@ -7,6 +7,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { activities, type DbHandle, followups, leads, type Transaction, users } from '@leadora/database';
+import { rescoreLeads } from '@leadora/domain';
 import { aliasedTable, and, asc, desc, eq, gte, inArray, lt, min, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import type { AuthContext } from '../auth/auth-context';
@@ -205,6 +206,7 @@ export class FollowupsService {
         },
       });
       await this.syncLead(tx, current.leadId, input.status === 'COMPLETED' && CONTACT_TYPES.has(input.type ?? current.type));
+      if (input.status === 'COMPLETED') await rescoreLeads(tx, auth.organizationId, [current.leadId]);
       return this.get(tx, auth.organizationId, id);
     });
   }
