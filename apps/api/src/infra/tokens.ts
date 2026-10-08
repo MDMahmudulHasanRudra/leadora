@@ -11,3 +11,5 @@ export const EMBEDDINGS_QUEUE = Symbol('EMBEDDINGS_QUEUE');
 export const STORAGE = Symbol('STORAGE');
 export const AUTOMATIONS_QUEUE = Symbol('AUTOMATIONS_QUEUE');
 export const WEBHOOKS_QUEUE = Symbol('WEBHOOKS_QUEUE');
+/** (provider, secret, token, ip) => Promise<boolean>. Overridden in tests. */
+export const CAPTCHA_VERIFIER = Symbol('CAPTCHA_VERIFIER');

@@ -1,4 +1,4 @@
-import { createParamDecorator, type ExecutionContext, SetMetadata } from '@nestjs/common';
+import { applyDecorators, createParamDecorator, type ExecutionContext, SetMetadata } from '@nestjs/common';
 import type { Permission } from './permissions';
 
 export interface AuthContext {
@@ -15,10 +15,17 @@ export interface AuthContext {
 export type AuthedRequest = { auth?: AuthContext };
 
 export const IS_PUBLIC = 'auth:isPublic';
+export const CROSS_ORIGIN = 'auth:crossOrigin';
 export const REQUIRED_PERMISSIONS = 'auth:permissions';
 
 /** Opt a route out of authentication. Everything else requires a session. */
 export const Public = () => SetMetadata(IS_PUBLIC, true);
+
+/**
+ * Public endpoints called from other websites (embedded forms, chat widget). They carry no cookies and skip
+ * the CSRF origin check; each such handler validates the origin against its own allow-list.
+ */
+export const PublicCrossOrigin = () => applyDecorators(SetMetadata(IS_PUBLIC, true), SetMetadata(CROSS_ORIGIN, true));
 
 /** Require every listed permission. */
 export const RequirePermission = (...permissions: Permission[]) => SetMetadata(REQUIRED_PERMISSIONS, permissions);

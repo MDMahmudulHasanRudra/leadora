@@ -33,6 +33,8 @@ export interface IngestContext {
   sourceType: IngestSourceType;
   /** With no explicit owner: pick one via assignment rules (falling back to the actor). */
   autoAssign?: boolean;
+  /** Source attribution and other non-field data (e.g. form id, UTM parameters, page URL). */
+  metadata?: Record<string, unknown>;
 }
 
 const invalid = (code: string, message: string) => new DomainError('invalid', code, message);
@@ -96,6 +98,7 @@ export async function ingestLead(tx: Transaction, ctx: IngestContext, input: Cre
       stageId: stage.id,
       ownerUserId,
       createdByUserId: ctx.actorUserId,
+      metadata: ctx.metadata ?? null,
     })
     .returning({ id: leads.id });
 

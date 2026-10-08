@@ -1,6 +1,8 @@
 import { type CanActivate, type ExecutionContext, ForbiddenException, Inject, Injectable } from '@nestjs/common';
 import type { Env } from '@leadora/config';
+import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
+import { CROSS_ORIGIN } from './auth-context';
 import { ENV } from '../infra/tokens';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
@@ -14,13 +16,14 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 export class OriginGuard implements CanActivate {
   private readonly allowed: Set<string>;
 
-  constructor(@Inject(ENV) env: Env) {
+  constructor(@Inject(ENV) env: Env, private readonly reflector: Reflector) {
     this.allowed = new Set(env.APP_ORIGINS);
   }
 
   canActivate(ctx: ExecutionContext): boolean {
     const req = ctx.switchToHttp().getRequest<Request>();
     if (SAFE_METHODS.has(req.method)) return true;
+    if (this.reflector.getAllAndOverride<boolean>(CROSS_ORIGIN, [ctx.getHandler(), ctx.getClass()])) return true;
     const origin = req.get('origin');
     if (origin === undefined || this.allowed.has(origin)) return true;
     throw new ForbiddenException({ code: 'ORIGIN_NOT_ALLOWED', message: 'Request origin is not allowed' });
