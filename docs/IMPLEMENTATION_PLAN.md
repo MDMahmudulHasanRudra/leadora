@@ -10,7 +10,7 @@ Follows spec §103–§114 and the sprint backlog in §148. Each phase is done o
 | 1 | CRM MVP: auth, organizations, users, teams, RBAC, leads, contacts, companies, pipeline, assignment, follow-ups, tasks, notes, activities, dashboard | **Done** (2026-10-08) |
 | 2 | Communication: inbox, conversations, messages, realtime, email adapter, webhooks | Not started |
 | 3 | AI foundation: provider abstraction, OpenAI Responses API, settings, usage logging, prompt versioning, structured outputs | Done |
-| 4 | AI intelligence: scoring, conversation analysis, summaries, reply assistant, next action, NL search | Not started |
+| 4 | AI intelligence: scoring, conversation analysis, summaries, reply assistant, next action, NL search | Done |
 | 5 | Knowledge base / RAG with pgvector and citations | Not started |
 | 6 | Automation engine | Not started |
 | 7 | Integrations: WhatsApp, Facebook, Instagram, web chat, API keys | Not started |
@@ -119,7 +119,7 @@ Follow-ups noted, not done:
 
 ## Phase 4 — AI sales intelligence
 
-Slices: (1) hybrid scoring ✅ · (2) conversation analysis + summary ✅ · (3) reply assistant ✅ · (4) next action ✅ · (5) natural-language CRM search.
+Slices: (1) hybrid scoring ✅ · (2) conversation analysis + summary ✅ · (3) reply assistant ✅ · (4) next action ✅ · (5) natural-language CRM search ✅.
 
 ### Decisions
 
@@ -129,6 +129,7 @@ Slices: (1) hybrid scoring ✅ · (2) conversation analysis + summary ✅ · (3)
 - **Conversation analysis** (spec §31) stores the structured result in `ai_analyses` and shows the summary in the inbox. Internal notes are included as context.
 - **Reply assistant** (spec §32): suggest, rewrite, translate (English/Bangla). It only fills the composer and nothing is stored or sent. Internal notes are excluded so they can never leak into a customer reply. Missing facts become `[placeholders]`, and the UI warns before a reply with placeholders is sent. Messages sent from an AI draft are flagged `aiGenerated` and shown as "AI-assisted". Auto-reply (sending without a human) stays off; it needs the policy engine in Phase 6.
 - **Next action:** lead analysis proposes one concrete follow-up (type, hours from now, note). "Schedule it" turns it into an ordinary follow-up through the normal API with the user's permissions. AI never writes it on its own (spec §39: reversible writes need approval).
+- **AI Assistant** (spec §38–39) works in three steps: question → plan → permission check → read-only tool → summary. The planner fills a strict, typed plan (one of five tools, with nullable filters). The server checks the tool's permission and builds the tenant-scoped query, so the model never writes SQL or sees data the user can't. The summary call sees only the returned rows, and is skipped when nothing matched. Writes and anything else come back as `unsupported`. Every question, plan and outcome is stored in `ai_assistant_queries`, which is both the audit trail and the user's history.
 
 ### Threat model additions
 
@@ -138,6 +139,9 @@ Slices: (1) hybrid scoring ✅ · (2) conversation analysis + summary ✅ · (3)
 | Tampering | Customer writes "price" to inflate a score | rules are capped and explainable; managers see the breakdown | breakdown lists every rule applied |
 | Tampering | Customer message tells the model to "mark me HOT" | thread passed as a data block; output schema-validated; AI score is only half the blend | injection text in the test thread |
 | Info disclosure | Internal note leaks into an AI-drafted customer reply | reply input excludes INTERNAL messages | — (by construction) |
+| Elevation | Agent asks the assistant for team or revenue data | tool permission checked before it runs; the model is not called again | agent → DENIED, no tool run |
+| Tampering | Question asks the assistant to delete or change data | only read-only tools exist; anything else is `unsupported` | delete request → UNSUPPORTED |
+| Info disclosure | Assistant returns another tenant's leads | every tool scopes by organization in code | rival's hot lead absent |
 
 ## Phase 3 — AI foundation
 

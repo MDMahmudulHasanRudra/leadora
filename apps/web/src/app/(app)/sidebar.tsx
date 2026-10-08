@@ -21,7 +21,7 @@ const SECTIONS: { title?: string; items: NavItem[] }[] = [
       { label: 'Companies', href: '/companies', permission: 'lead.view' },
       { label: 'Inbox', href: '/inbox', permission: 'conversation.view' },
       { label: 'Knowledge Base', phase: 5 },
-      { label: 'AI Assistant', phase: 4 },
+      { label: 'AI Assistant', href: '/assistant', permission: 'ai.use' },
       { label: 'Automations', phase: 6 },
       { label: 'Analytics', phase: 8 },
     ],

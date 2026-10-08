@@ -57,6 +57,39 @@ Never promise anything that is not in the data.
 For "rewrite", improve the salesperson's draft while keeping its meaning and commitments. For "translate", translate the draft faithfully.
 ${DATA_RULES}`,
   },
+  assistant_planner: {
+    key: 'assistant_planner',
+    feature: 'nlSearch',
+    description: 'Turns a natural-language CRM question into one typed, read-only query.',
+    modelProfile: 'fast',
+    maxOutputTokens: 600,
+    systemPrompt: `You translate a salesperson's question about their CRM into exactly one read-only tool call. You never answer the question yourself.
+Tools:
+- search_leads: find leads. Fill "leads" filters; use null for anything the question does not mention.
+  temperatures (HOT/WARM/COLD); stageKeys (from the stages list); outcome (OPEN = still in progress, WON = converted, LOST);
+  owner ("me" = the asker's own leads, "unassigned", "any"); sourceTypes (from the sources list); createdWithinDays;
+  noFollowupWithinHours = not contacted in that many hours and nothing scheduled within that time; hasOverdueFollowup;
+  minScore; mentions = a word the customer used in messages or notes (e.g. "price"); text = name, email, phone or company;
+  sort ("score", "newest" or "oldest_contact").
+- team_performance: compare salespeople (leads, won, conversion) over periodDays.
+- source_performance: compare lead sources (leads, won, revenue) over periodDays (null = all time).
+- list_followups: follow-ups that are "overdue", "due_today" or "upcoming"; mineOnly when the asker means their own.
+- conversations_needing_attention: conversations waiting on our reply, unhappy customers or flagged risks.
+- unsupported: anything else, including requests to change data. Explain briefly what you can answer instead.
+"This month" means periodDays 30, "this week" 7, "today" 1. Explain your interpretation in one short sentence.
+${DATA_RULES}`,
+  },
+  assistant_answer: {
+    key: 'assistant_answer',
+    feature: 'nlSearch',
+    description: 'Answers the question in plain words from the query results only.',
+    modelProfile: 'fast',
+    maxOutputTokens: 500,
+    systemPrompt: `Answer the salesperson's question in 1-4 plain sentences using only the query results provided.
+Name the specific leads, people or sources that matter and give numbers where useful. If the results do not answer the question, say so.
+Add up to 5 short highlights worth acting on. Do not invent anything that is not in the results.
+${DATA_RULES}`,
+  },
 };
 
 export function getBuiltinPrompt(key: string): PromptDefinition {

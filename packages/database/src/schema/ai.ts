@@ -119,5 +119,25 @@ export const aiAnalyses = pgTable(
   (t) => [index('ai_analyses_entity_idx').on(t.entityId, t.createdAt.desc())],
 );
 
+// Spec §38: natural-language questions, the typed plan the model chose and what came back — auditable history.
+export const aiAssistantQueries = pgTable(
+  'ai_assistant_queries',
+  {
+    id: id(),
+    organizationId: uuid()
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    userId: uuid().references(() => users.id, { onDelete: 'set null' }),
+    question: text().notNull(),
+    tool: varchar({ length: 60 }),
+    plan: jsonb().$type<Record<string, unknown>>(),
+    status: varchar({ length: 20 }).notNull(),
+    resultCount: integer(),
+    answer: text(),
+    createdAt: timestamp(ms).notNull().defaultNow(),
+  },
+  (t) => [index('ai_assistant_queries_user_idx').on(t.organizationId, t.userId, t.createdAt.desc())],
+);
+
 export type AiSettings = typeof aiSettings.$inferSelect;
 export type AiRun = typeof aiRuns.$inferSelect;
