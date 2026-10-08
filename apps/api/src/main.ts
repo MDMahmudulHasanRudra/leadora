@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
 import type { Env } from '@leadora/config';
@@ -8,7 +9,8 @@ import { configureApp } from './app.setup';
 import { ENV } from './infra/tokens';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  // rawBody: webhook signatures are computed over the exact bytes received.
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true, rawBody: true });
   const env = app.get<Env>(ENV);
 
   app.useLogger(app.get(Logger));

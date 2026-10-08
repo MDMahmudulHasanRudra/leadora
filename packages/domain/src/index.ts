@@ -7,5 +7,6 @@ export * from './leads/assignment';
 export * from './custom-fields/values';
 export * from './communication/delivery';
 export * from './communication/realtime';
+export * from './communication/inbound';
 export * from './imports/csv';
 export * from './imports/process';

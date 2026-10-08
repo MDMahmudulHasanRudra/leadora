@@ -18,6 +18,7 @@ export const DEFAULT_SOURCES = [
   { type: 'CSV', name: 'CSV import' },
   { type: 'WEBSITE', name: 'Website form' },
   { type: 'API', name: 'API' },
+  { type: 'EMAIL', name: 'Email' },
 ] as const;
 
 /** Everything a brand-new organization needs to be usable. Runs inside the creating transaction. */

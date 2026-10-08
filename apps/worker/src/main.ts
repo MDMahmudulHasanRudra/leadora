@@ -3,7 +3,14 @@ import { Worker, type Job } from 'bullmq';
 import pino from 'pino';
 import { baseLoggerOptions, loadEnv } from '@leadora/config';
 import { createDb } from '@leadora/database';
-import { type ChannelProviders, deliverMessage, markLeadImportFailed, processLeadImport, REALTIME_CHANNEL } from '@leadora/domain';
+import {
+  type ChannelProviders,
+  deliverMessage,
+  markLeadImportFailed,
+  processInboundEvent,
+  processLeadImport,
+  REALTIME_CHANNEL,
+} from '@leadora/domain';
 import Redis from 'ioredis';
 import { handleLeadImport } from './handlers/lead-import';
 import { handleMessageSend } from './handlers/message-send';
@@ -30,6 +37,12 @@ const handlers: Partial<Record<QueueName, Record<string, (job: Job) => Promise<u
   messages: {
     'message.send': (job) =>
       handleMessageSend({ deliver: (id, finalAttempt) => deliverMessage(db, id, providers, { finalAttempt }), publish }, job),
+    'inbound.process': async (job) => {
+      const result = await processInboundEvent(db, job.data.eventId);
+      if (result.status === 'PROCESSED' && result.organizationId) {
+        await publish(result.organizationId, 'conversation.updated', { conversationId: result.conversationId });
+      }
+    },
   },
   imports: {
     'lead.import': (job) =>

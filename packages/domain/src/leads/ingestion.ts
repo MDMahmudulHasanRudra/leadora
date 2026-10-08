@@ -21,7 +21,7 @@ export type IngestResult =
   | { status: 'CREATED'; leadId: string }
   | { status: 'DUPLICATE'; existingLeadId: string; matchedOn: 'email' | 'phone' };
 
-export type IngestSourceType = 'MANUAL' | 'CSV' | 'WEBSITE' | 'API';
+export type IngestSourceType = 'MANUAL' | 'CSV' | 'WEBSITE' | 'API' | 'EMAIL' | 'WEBHOOK' | 'WHATSAPP' | 'FACEBOOK' | 'INSTAGRAM';
 
 export interface IngestContext {
   organizationId: string;
