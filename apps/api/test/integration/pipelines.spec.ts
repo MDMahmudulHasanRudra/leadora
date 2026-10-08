@@ -35,7 +35,7 @@ describe('organization defaults: pipeline and lead sources', () => {
   it('gives a new organization default lead sources', async () => {
     const { agent } = await registerAdmin(t);
     const { body } = await agent.get('/api/v1/lead-sources').expect(200);
-    expect(body.items.map((s: { type: string }) => s.type).sort()).toEqual(['API', 'CSV', 'MANUAL', 'WEBSITE']);
+    expect(body.items.map((s: { type: string }) => s.type).sort()).toEqual(['API', 'CSV', 'EMAIL', 'MANUAL', 'WEBSITE']);
     expect(body.items.every((s: { enabled: boolean }) => s.enabled)).toBe(true);
   });
 
