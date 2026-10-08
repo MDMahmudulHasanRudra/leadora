@@ -12,7 +12,7 @@ const SECTIONS: { title?: string; items: NavItem[] }[] = [
   {
     items: [
       { label: 'Dashboard', href: '/' },
-      { label: 'Leads', phase: 1 },
+      { label: 'Leads', href: '/leads', permission: 'lead.view' },
       { label: 'Inbox', phase: 2 },
       { label: 'Pipeline', phase: 1 },
       { label: 'Contacts', phase: 1 },

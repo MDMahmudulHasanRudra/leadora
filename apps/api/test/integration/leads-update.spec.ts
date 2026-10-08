@@ -97,6 +97,12 @@ describe('updating and archiving leads', () => {
     expect(res.body.tags).toEqual(['Dhaka']);
   });
 
+  it('clears an optional field when sent empty', async () => {
+    const res = await patchLead(agent, lead.id, { companyName: '', jobTitle: null }).expect(200);
+    expect(res.body.companyName).toBeNull();
+    expect(res.body.jobTitle).toBeNull();
+  });
+
   it('rejects an empty update', async () => {
     await patchLead(agent, lead.id, {}).expect(422);
   });

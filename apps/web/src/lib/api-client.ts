@@ -3,9 +3,14 @@ export class ApiError extends Error {
     public readonly status: number,
     public readonly code: string,
     message: string,
-    public readonly details: { path: string; message: string }[] = [],
+    /** Raw `details` from the API: field errors for validation, structured data otherwise. */
+    public readonly raw?: unknown,
   ) {
     super(message);
+  }
+
+  get details(): { path: string; message: string }[] {
+    return Array.isArray(this.raw) ? this.raw : [];
   }
 
   fieldError(path: string): string | undefined {

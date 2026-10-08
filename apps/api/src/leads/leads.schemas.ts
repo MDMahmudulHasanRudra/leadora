@@ -1,6 +1,14 @@
 import { z } from 'zod';
 
-const optionalText = (max: number) => z.string().trim().max(max).optional().transform((v) => (v ? v : undefined));
+// Empty string or null clears the field; omitted leaves it unchanged.
+const optionalText = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .nullable()
+    .optional()
+    .transform((v) => (v === '' ? null : v));
 
 export const leadFields = {
   fullName: z.string().trim().min(1).max(200),
