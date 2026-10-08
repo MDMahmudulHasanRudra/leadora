@@ -3,8 +3,11 @@ import { Worker, type Job } from 'bullmq';
 import pino from 'pino';
 import { baseLoggerOptions, loadEnv } from '@leadora/config';
 import { createDb } from '@leadora/database';
-import { markLeadImportFailed, processLeadImport } from '@leadora/domain';
+import { type ChannelProviders, deliverMessage, markLeadImportFailed, processLeadImport, REALTIME_CHANNEL } from '@leadora/domain';
+import Redis from 'ioredis';
 import { handleLeadImport } from './handlers/lead-import';
+import { handleMessageSend } from './handlers/message-send';
+import { SmtpEmailProvider } from './providers/email';
 import { QUEUES, retryDelay, type QueueName } from './queues';
 
 const env = loadEnv();
@@ -12,11 +15,21 @@ const log = pino(baseLoggerOptions('worker', env.LOG_LEVEL));
 const { db, pool } = createDb(env.DATABASE_URL);
 
 const connection = { url: env.VALKEY_URL, maxRetriesPerRequest: null };
+const publisher = new Redis(env.VALKEY_URL, { maxRetriesPerRequest: 2 });
+const email = env.SMTP_URL ? new SmtpEmailProvider(env.SMTP_URL) : null;
+const providers: ChannelProviders = email ? { EMAIL: email } : {};
+const publish = async (organizationId: string, type: string, data: Record<string, unknown>) => {
+  await publisher.publish(REALTIME_CHANNEL, JSON.stringify({ organizationId, type, data })).catch(() => undefined);
+};
 
 // Handlers are registered per queue as features land; unknown job names fail loudly.
 const handlers: Partial<Record<QueueName, Record<string, (job: Job) => Promise<unknown>>>> = {
   default: {
     'system.ping': async (job) => ({ pong: true, at: new Date().toISOString(), id: job.id }),
+  },
+  messages: {
+    'message.send': (job) =>
+      handleMessageSend({ deliver: (id, finalAttempt) => deliverMessage(db, id, providers, { finalAttempt }), publish }, job),
   },
   imports: {
     'lead.import': (job) =>
@@ -76,6 +89,8 @@ async function shutdown(signal: string) {
   server.close();
   await Promise.allSettled(workers.map((w) => w.close()));
   await pool.end();
+  email?.close();
+  publisher.disconnect();
   log.info('worker.stopped');
   process.exit(0);
 }

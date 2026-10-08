@@ -5,5 +5,7 @@ export * from './leads/schemas';
 export * from './leads/ingestion';
 export * from './leads/assignment';
 export * from './custom-fields/values';
+export * from './communication/delivery';
+export * from './communication/realtime';
 export * from './imports/csv';
 export * from './imports/process';

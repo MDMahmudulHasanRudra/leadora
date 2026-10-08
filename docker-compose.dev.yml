@@ -7,3 +7,10 @@ services:
   valkey:
     ports:
       - "127.0.0.1:6379:6379"
+  # Local SMTP sink: every outbound email lands here. Web UI: http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:v1.27
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8025:8025"
+      - "127.0.0.1:1025:1025"

@@ -15,6 +15,10 @@
     "@leadora/domain": "workspace:*",
     "bullmq": "^6.3.11",
     "ioredis": "^6.0.0",
+    "nodemailer": "^10.0.15",
     "pino": "^10.4.0"
+  },
+  "devDependencies": {
+    "@types/nodemailer": "^8.0.2"
   }
 }
