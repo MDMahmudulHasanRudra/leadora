@@ -20,7 +20,7 @@ const SECTIONS: { title?: string; items: NavItem[] }[] = [
       { label: 'Contacts', href: '/contacts', permission: 'lead.view' },
       { label: 'Companies', href: '/companies', permission: 'lead.view' },
       { label: 'Inbox', href: '/inbox', permission: 'conversation.view' },
-      { label: 'Knowledge Base', phase: 5 },
+      { label: 'Knowledge Base', href: '/knowledge', permission: 'knowledge.view' },
       { label: 'AI Assistant', href: '/assistant', permission: 'ai.use' },
       { label: 'Automations', phase: 6 },
       { label: 'Analytics', phase: 8 },

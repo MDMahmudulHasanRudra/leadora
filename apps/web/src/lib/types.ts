@@ -294,3 +294,39 @@ export interface ConversationAnalysis {
   recommendedNextAction: string;
   score: number;
 }
+export interface KbCollection {
+  id: string;
+  name: string;
+  description: string | null;
+  visibility: 'ORGANIZATION' | 'TEAMS';
+  teamIds: string[];
+  documentCount: number;
+}
+
+export interface KbDocument {
+  id: string;
+  collectionId: string;
+  title: string;
+  sourceType: 'FILE' | 'URL' | 'TEXT';
+  sourceUrl: string | null;
+  fileName: string | null;
+  mimeType: string;
+  sizeBytes: number;
+  version: number;
+  status: 'UPLOADED' | 'PROCESSING' | 'INDEXED' | 'FAILED' | 'OUTDATED';
+  error: string | null;
+  chunkCount: number;
+  embeddingModel: string | null;
+  indexedAt: string | null;
+  createdAt: string;
+}
+
+export interface KbCitation {
+  id: string;
+  documentId: string;
+  title: string;
+  page: number | null;
+  section: string | null;
+  sourceUrl: string | null;
+  snippet: string;
+}

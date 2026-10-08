@@ -119,7 +119,7 @@ Follow-ups noted, not done:
 
 ## Phase 5 — Knowledge base (RAG)
 
-Slices: (1) storage + sources + indexing pipeline · (2) permission-aware retrieval + cited answers · (3) knowledge base UI · (4) grounded reply drafts.
+Slices: (1) storage + sources + indexing pipeline ✅ · (2) permission-aware retrieval + cited answers ✅ · (3) knowledge base UI ✅ · (4) grounded reply drafts.
 
 ### Decisions
 
