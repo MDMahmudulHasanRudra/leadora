@@ -13,11 +13,26 @@ import { DB, ENV } from '../infra/tokens';
 import { ConversationsService, listSchema, messageSchema, startSchema, updateSchema } from './conversations.service';
 
 const Id = new ParseUUIDPipe({ errorHttpStatusCode: 404 });
-const inboxSchema = z.object({
-  name: z.string().trim().min(1).max(100),
-  channel: z.enum(['EMAIL', 'WEB_CHAT', 'WHATSAPP', 'FACEBOOK', 'INSTAGRAM', 'TELEGRAM', 'SMS']),
-  address: z.string().trim().min(1).max(254),
-});
+const origin = z
+  .string()
+  .trim()
+  .url()
+  .transform((v) => new URL(v).origin);
+const inboxSchema = z.discriminatedUnion('channel', [
+  z.object({ name: z.string().trim().min(1).max(100), channel: z.literal('EMAIL'), address: z.string().trim().email().max(254) }),
+  // Website chat: the widget key is generated; allowed origins guard the public endpoints.
+  z.object({
+    name: z.string().trim().min(1).max(100),
+    channel: z.literal('WEB_CHAT'),
+    config: z
+      .object({
+        allowedOrigins: z.array(origin).max(20).default([]),
+        title: z.string().trim().max(80).default('Chat with us'),
+        greeting: z.string().trim().max(300).default('Hi! How can we help?'),
+      })
+      .default({ allowedOrigins: [], title: 'Chat with us', greeting: 'Hi! How can we help?' }),
+  }),
+]);
 type InboxBody = z.infer<typeof inboxSchema>;
 type StartBody = z.infer<typeof startSchema>;
 type MessageBody = z.infer<typeof messageSchema>;
@@ -50,12 +65,24 @@ export class ConversationsController {
   @RequirePermission('settings.manage')
   async createInbox(@CurrentAuth() auth: AuthContext, @Body(new ZodPipe(inboxSchema)) body: InboxBody) {
     const webhookSecret = `whsec_${randomBytes(32).toString('base64url')}`;
+    const widgetKey = body.channel === 'WEB_CHAT' ? `wc_${randomBytes(18).toString('base64url')}` : null;
     try {
       const [inbox] = await this.handle.db
         .insert(inboxes)
-        .values({ organizationId: auth.organizationId, ...body, webhookSecretEnc: encryptSecret(webhookSecret, this.env.DATA_ENCRYPTION_KEY) })
+        .values({
+          organizationId: auth.organizationId,
+          name: body.name,
+          channel: body.channel,
+          address: body.channel === 'EMAIL' ? body.address : widgetKey!,
+          config: body.channel === 'WEB_CHAT' ? body.config : {},
+          webhookSecretEnc: encryptSecret(webhookSecret, this.env.DATA_ENCRYPTION_KEY),
+        })
         .returning({ id: inboxes.id, name: inboxes.name, channel: inboxes.channel, address: inboxes.address, enabled: inboxes.enabled });
-      return { inbox, webhookSecret, webhookUrl: `${this.env.PUBLIC_BASE_URL}/api/v1/webhooks/inbound/${inbox!.id}` };
+      const base = this.env.PUBLIC_BASE_URL.replace(/\/$/, '');
+      if (widgetKey) {
+        return { inbox, widgetKey, embedCode: `<script src="${base}/chat-widget.js" data-widget-key="${widgetKey}" async></script>` };
+      }
+      return { inbox, webhookSecret, webhookUrl: `${base}/api/v1/webhooks/inbound/${inbox!.id}` };
     } catch (err) {
       if (isUniqueViolation(err, 'inboxes_org_name_unique')) {
         throw new ConflictException({ code: 'INBOX_EXISTS', message: 'An inbox with this name already exists' });

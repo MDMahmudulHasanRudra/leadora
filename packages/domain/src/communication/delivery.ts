@@ -14,6 +14,8 @@ export interface OutboundEnvelope {
   /** Email threading; other channels ignore these. */
   inReplyTo: string | null;
   references: string[];
+  /** Channel adapters read their account settings (and sealed credentials) from here. */
+  inbox: { id: string; config: Record<string, unknown> };
 }
 
 /** Spec §21: core code depends on this, never on a provider SDK. */
@@ -24,6 +26,31 @@ export interface ChannelProvider {
 export type ChannelProviders = Partial<Record<ChannelKind, ChannelProvider>>;
 
 const MAX_REFERENCES = 20;
+
+/** Where a reply goes on each channel; null when the lead has no address there. */
+export function recipientFor(channel: ChannelKind, lead: { email: string | null; phone: string | null; metadata: unknown }, conversationId: string): string | null {
+  switch (channel) {
+    case 'EMAIL':
+      return lead.email;
+    case 'WEB_CHAT':
+      // The visitor's widget polls its conversation; there is no external address.
+      return conversationId;
+    case 'FACEBOOK':
+    case 'INSTAGRAM': {
+      const ids = (lead.metadata as { channelIds?: Record<string, string> } | null)?.channelIds;
+      return ids?.[channel] ?? null;
+    }
+    default:
+      return lead.phone;
+  }
+}
+
+/** Website chat has nothing to transmit: the message is stored and the widget fetches it. */
+export const webChatProvider: ChannelProvider = {
+  async send() {
+    return { externalMessageId: `webchat-${crypto.randomUUID()}` };
+  },
+};
 
 /**
  * Sends one QUEUED outbound message. Safe to retry: anything not QUEUED is skipped. Transient provider
@@ -63,7 +90,7 @@ export async function deliverMessage(
   const references = thread.map((m) => m.externalMessageId!).slice(-MAX_REFERENCES);
   const baseSubject = row.conversation.subject ?? `Message from ${row.inbox.name}`;
   const subject = references.length && !/^re:/i.test(baseSubject) ? `Re: ${baseSubject}` : baseSubject;
-  const to = row.inbox.channel === 'EMAIL' ? row.lead.email : row.lead.phone;
+  const to = recipientFor(row.inbox.channel, row.lead, row.conversation.id);
 
   let externalMessageId: string;
   try {
@@ -77,6 +104,7 @@ export async function deliverMessage(
       text: row.message.content,
       inReplyTo: references.at(-1) ?? null,
       references,
+      inbox: { id: row.inbox.id, config: row.inbox.config },
     }));
   } catch (err) {
     if (opts.finalAttempt) await fail((err as Error).message);

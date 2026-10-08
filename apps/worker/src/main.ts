@@ -24,6 +24,7 @@ import {
   sendFollowupReminders,
   stalePendingDeliveries,
   staleQueuedRuns,
+  webChatProvider,
   webhookDeliveryJob,
 } from '@leadora/domain';
 import { createStorage } from '@leadora/storage';
@@ -40,7 +41,7 @@ const { db, pool } = createDb(env.DATABASE_URL);
 const connection = { url: env.VALKEY_URL, maxRetriesPerRequest: null };
 const publisher = new Redis(env.VALKEY_URL, { maxRetriesPerRequest: 2 });
 const email = env.SMTP_URL ? new SmtpEmailProvider(env.SMTP_URL) : null;
-const providers: ChannelProviders = email ? { EMAIL: email } : {};
+const providers: ChannelProviders = { WEB_CHAT: webChatProvider, ...(email ? { EMAIL: email } : {}) };
 const storage = createStorage(env);
 // Same provider wiring as the API's AI module; the org's own key comes from ai_settings per call.
 const aiDeps = {
