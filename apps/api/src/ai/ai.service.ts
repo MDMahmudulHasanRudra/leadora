@@ -1,5 +1,5 @@
 import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import type { AiProvider } from '@leadora/ai';
+import { type AiProvider, AiProviderError } from '@leadora/ai';
 import type { Env } from '@leadora/config';
 import {
   activities,
@@ -13,7 +13,16 @@ import {
   messages,
   users,
 } from '@leadora/database';
-import { type AiDeps, BUILTIN_PROMPTS, dataBlock, encryptSecret, monthToDateSpendUsd, runStructured } from '@leadora/domain';
+import {
+  type AiDeps,
+  BUILTIN_PROMPTS,
+  dataBlock,
+  decryptSecret,
+  encryptSecret,
+  estimateCostUsd,
+  monthToDateSpendUsd,
+  runStructured,
+} from '@leadora/domain';
 import { and, asc, desc, eq, gte, inArray, max, sql } from 'drizzle-orm';
 import type { AuthContext } from '../auth/auth-context';
 import { AI_PROVIDER_FACTORY, DB, ENV } from '../infra/tokens';
@@ -76,6 +85,39 @@ export class AiService {
       .values({ organizationId: auth.organizationId, ...values })
       .onConflictDoUpdate({ target: aiSettings.organizationId, set: values });
     return this.getSettings(auth);
+  }
+
+  /** A tiny live call so admins can check the key and model before switching AI on. Logged like any run. */
+  async testConnection(auth: AuthContext) {
+    const [s] = await this.handle.db.select().from(aiSettings).where(eq(aiSettings.organizationId, auth.organizationId));
+    const model = s?.models.fast ?? s?.models.balanced;
+    if (!s?.apiKeyEnc || !model) {
+      throw new ConflictException({ code: 'AI_NOT_CONFIGURED', message: 'Add an API key and a fast or balanced model first' });
+    }
+    const provider = this.providerFor(s.provider, decryptSecret(s.apiKeyEnc, this.env.DATA_ENCRYPTION_KEY));
+    const started = Date.now();
+    const base = { organizationId: auth.organizationId, userId: auth.userId, provider: s.provider, model, purpose: 'connection_test', promptKey: 'connection_test', promptVersion: 0, attempts: 1 };
+    try {
+      const res = await provider.generateText({ model, system: 'You are a connectivity check.', input: 'Reply with the single word OK.', maxOutputTokens: 16 });
+      const latencyMs = Date.now() - started;
+      const cost = estimateCostUsd(s.prices[model], res.usage);
+      await this.handle.db.insert(aiRuns).values({
+        ...base,
+        status: 'SUCCEEDED',
+        requestId: res.requestId,
+        inputTokens: res.usage.inputTokens,
+        cachedTokens: res.usage.cachedTokens,
+        outputTokens: res.usage.outputTokens,
+        estimatedCostUsd: cost === null ? null : cost.toFixed(6),
+        latencyMs,
+      });
+      return { ok: true as const, model, latencyMs };
+    } catch (err) {
+      const code = err instanceof AiProviderError ? err.code : 'AI_UNAVAILABLE';
+      const message = err instanceof AiProviderError ? err.message : 'The AI provider could not be reached';
+      await this.handle.db.insert(aiRuns).values({ ...base, status: 'FAILED', errorCode: code, latencyMs: Date.now() - started });
+      return { ok: false as const, model, code, message };
+    }
   }
 
   /** Builds the analysis input from CRM data, every untrusted part wrapped as data (spec §56). */

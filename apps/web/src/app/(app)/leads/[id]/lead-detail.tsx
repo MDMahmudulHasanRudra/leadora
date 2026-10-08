@@ -8,10 +8,11 @@ import { TaskList } from '@/components/task-list';
 import { Alert, Button, Card, formatDateTime, Input, Select } from '@/components/ui';
 import { api, ApiError } from '@/lib/api-client';
 import { formatCustomValue } from '@/components/custom-field-input';
-import { type Activity, type CustomFieldDef, FOLLOWUP_TYPES, type Followup, type Lead, type Stage, type Task } from '@/lib/types';
+import { type Activity, type CustomFieldDef, FOLLOWUP_TYPES, type Followup, type Lead, type LeadAnalysis, type Stage, type Task } from '@/lib/types';
 import { NewTaskForm } from '../../tasks/new-task-form';
 import { LeadForm } from '../lead-form';
 import { PriorityBadge, StageBadge } from '../lead-bits';
+import { ACTION_LABELS, LeadAiPanel } from './lead-ai-panel';
 
 type Person = { id: string; fullName: string; active: boolean };
 
@@ -24,7 +25,8 @@ interface Props {
   stages: Stage[];
   users: Person[];
   timeZone: string;
-  can: { update: boolean; assign: boolean; archive: boolean; followup: boolean; message: boolean };
+  can: { update: boolean; assign: boolean; archive: boolean; followup: boolean; message: boolean; ai: boolean; aiConfigure: boolean };
+  analysis: { result: LeadAnalysis; createdAt: string } | null;
   inboxes: { id: string; name: string; channel: string }[];
 }
 
@@ -35,7 +37,7 @@ const FIELD_LABELS: Record<string, string> = {
   sourceId: 'source',
 };
 
-export function LeadDetail({ lead, activities, followups, tasks, customFields, stages, users, timeZone, can, inboxes }: Props) {
+export function LeadDetail({ lead, activities, followups, tasks, customFields, stages, users, timeZone, can, inboxes, analysis }: Props) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [composing, setComposing] = useState(false);
@@ -84,6 +86,8 @@ export function LeadDetail({ lead, activities, followups, tasks, customFields, s
         return p.mergedContact ? 'converted it, merging into an existing contact' : 'converted it to a contact';
       case 'note.added':
         return 'added a note';
+      case 'ai.analysis_completed':
+        return `ran an AI analysis: score ${p.score}${p.recommendedAction ? `, suggested “${ACTION_LABELS[String(p.recommendedAction)] ?? p.recommendedAction}”` : ''}`;
       case 'followup.created':
         return `scheduled a ${String(p.type).toLowerCase()} for ${formatDateTime(String(p.scheduledAt), timeZone)}`;
       case 'followup.completed':
@@ -155,6 +159,12 @@ export function LeadDetail({ lead, activities, followups, tasks, customFields, s
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <StageBadge stage={lead.stage} />
               <PriorityBadge priority={lead.priority} />
+              {lead.score !== null && (
+                <span className="text-xs text-zinc-500 tabular-nums">
+                  Score {lead.score}
+                  {lead.temperature && ` · ${lead.temperature.charAt(0)}${lead.temperature.slice(1).toLowerCase()}`}
+                </span>
+              )}
               {archived && <span className="text-xs font-medium text-red-600">Archived</span>}
             </div>
           </div>
@@ -344,6 +354,15 @@ export function LeadDetail({ lead, activities, followups, tasks, customFields, s
           </Card>
         </div>
       )}
+
+      <LeadAiPanel
+        leadId={lead.id}
+        analysis={analysis?.result ?? null}
+        analyzedAt={analysis?.createdAt ?? null}
+        canRun={can.ai && !archived}
+        canConfigure={can.aiConfigure}
+        timeZone={timeZone}
+      />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section>

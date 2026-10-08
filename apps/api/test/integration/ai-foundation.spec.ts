@@ -1,7 +1,7 @@
-import { FakeAiProvider } from '@leadora/ai';
+import { AiProviderError, FakeAiProvider } from '@leadora/ai';
 import { sql } from 'drizzle-orm';
 import type TestAgent from 'supertest/lib/agent';
-import { AI_PROVIDER_FACTORY } from '../../src/infra/tokens';
+import { AI_PROVIDER_FACTORY, ENV } from '../../src/infra/tokens';
 import { createTestApp, type TestApp } from '../support/app';
 import { login, ORIGIN, registerAdmin } from '../support/fixtures';
 import { createLead } from '../support/leads';
@@ -76,6 +76,26 @@ describe('AI foundation: settings, gateway, prompts, usage', () => {
     expect((await put(admin, { apiKey: '' }).expect(200)).body.hasApiKey).toBe(false);
   });
 
+  it('tests the provider connection without enabling AI and reports provider failures', async () => {
+    const test = () => admin.post('/api/v1/ai/settings/test').set('Origin', ORIGIN);
+    expect((await test().expect(409)).body.error.code).toBe('AI_NOT_CONFIGURED');
+    await configure();
+    await put(admin, { enabled: false }).expect(200);
+
+    fake.reply('OK');
+    expect((await test().expect(200)).body).toMatchObject({ ok: true, model: 'model-fast' });
+    expect(fake.requests[0]).toMatchObject({ model: 'model-fast', maxOutputTokens: 16 });
+
+    fake.reply(new AiProviderError('AI_AUTH_FAILED', 'The AI provider rejected the API key', 401));
+    expect((await test().expect(200)).body).toMatchObject({ ok: false, code: 'AI_AUTH_FAILED' });
+
+    const { rows } = await t.db.execute<{ purpose: string; status: string }>(sql`select purpose, status from ai_runs order by created_at`);
+    expect(rows).toEqual([
+      { purpose: 'connection_test', status: 'SUCCEEDED' },
+      { purpose: 'connection_test', status: 'FAILED' },
+    ]);
+  });
+
   it('restricts AI settings to ai.configure', async () => {
     await admin
       .post('/api/v1/users')
@@ -84,6 +104,7 @@ describe('AI foundation: settings, gateway, prompts, usage', () => {
       .expect(201);
     const { agent: manager } = await login(t, 'm@acme.test', 'manager strong password');
     await manager.get('/api/v1/ai/settings').expect(403);
+    await manager.post('/api/v1/ai/settings/test').set('Origin', ORIGIN).expect(403);
     await put(manager, { enabled: true }).expect(403);
   });
 
@@ -93,6 +114,20 @@ describe('AI foundation: settings, gateway, prompts, usage', () => {
     await put(admin, { enabled: true }).expect(200);
     expect((await analyze(admin, lead.id).expect(409)).body.error.code).toBe('AI_NOT_CONFIGURED');
     await admin.patch(`/api/v1/leads/${lead.id}`).set('Origin', ORIGIN).send({ priority: 'HIGH' }).expect(200);
+  });
+
+  it('reports the installation kill switch separately from the organization switch', async () => {
+    await configure();
+    const lead = (await createLead(admin).expect(201)).body;
+    const env = t.app.get<{ ENABLE_AI: boolean }>(ENV);
+    env.ENABLE_AI = false;
+    try {
+      expect((await analyze(admin, lead.id).expect(409)).body.error.code).toBe('AI_PLATFORM_DISABLED');
+      expect((await admin.get('/api/v1/ai/settings').expect(200)).body.platformEnabled).toBe(false);
+    } finally {
+      env.ENABLE_AI = true;
+    }
+    expect(fake.requests).toHaveLength(0);
   });
 
   it('analyzes a lead, stores the result, updates the score and logs usage and cost', async () => {

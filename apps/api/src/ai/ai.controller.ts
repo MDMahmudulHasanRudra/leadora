@@ -24,6 +24,13 @@ export class AiController {
     return this.ai.updateSettings(auth, body);
   }
 
+  @Post('settings/test')
+  @HttpCode(200)
+  @RequirePermission('ai.configure')
+  test(@CurrentAuth() auth: AuthContext) {
+    return this.ai.testConnection(auth);
+  }
+
   @Post('leads/:id/analyze')
   @HttpCode(200)
   @RequirePermission('ai.use', 'lead.view')

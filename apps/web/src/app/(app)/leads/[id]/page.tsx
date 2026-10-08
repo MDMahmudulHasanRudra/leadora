@@ -1,6 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
 import { apiGet, getIdentity, requireData } from '@/lib/api-server';
-import type { Activity, CustomFieldDef, Followup, Lead, Page, Pipeline, Task, UserRow } from '@/lib/types';
+import type { Activity, CustomFieldDef, Followup, Lead, LeadAnalysis, Page, Pipeline, Task, UserRow } from '@/lib/types';
 import { LeadDetail } from './lead-detail';
 
 export const dynamic = 'force-dynamic';
@@ -15,7 +15,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
   if (status === 404 || !lead) notFound();
 
   const can = (p: string) => identity.permissions.includes(p);
-  const [activities, pipelines, users, fields, followups, tasks, inboxes] = await Promise.all([
+  const [activities, pipelines, users, fields, followups, tasks, inboxes, analysis] = await Promise.all([
     requireData<Page<Activity>>(`/leads/${lead.id}/activities`),
     requireData<Page<Pipeline>>('/pipelines'),
     can('user.view') ? requireData<Page<UserRow>>('/users') : Promise.resolve({ items: [] as UserRow[] }),
@@ -25,6 +25,8 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
     can('conversation.view')
       ? requireData<Page<{ id: string; name: string; channel: string }>>('/inboxes')
       : Promise.resolve({ items: [] as { id: string; name: string; channel: string }[] }),
+    // 404 just means no analysis yet.
+    apiGet<{ result: LeadAnalysis; createdAt: string }>(`/ai/leads/${lead.id}/analysis`).then((r) => r.data),
   ]);
 
   return (
@@ -37,7 +39,8 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
       stages={pipelines.items.find((p) => p.id === lead.pipelineId)?.stages ?? []}
       users={users.items.map(({ id, fullName, status }) => ({ id, fullName, active: status === 'ACTIVE' }))}
       timeZone={identity.user.timezone}
-      can={{ update: can('lead.update'), assign: can('lead.assign'), archive: can('lead.delete'), followup: can('followup.create'), message: can('conversation.reply') }}
+      can={{ update: can('lead.update'), assign: can('lead.assign'), archive: can('lead.delete'), followup: can('followup.create'), message: can('conversation.reply'), ai: can('ai.use'), aiConfigure: can('ai.configure') }}
+      analysis={analysis}
       inboxes={inboxes.items}
     />
   );

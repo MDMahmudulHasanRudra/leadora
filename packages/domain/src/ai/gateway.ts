@@ -65,7 +65,8 @@ export async function monthToDateSpendUsd(db: Database, organizationId: string, 
  * ai_runs row for every outcome. Throws DomainError on any failure, so callers never persist bad output.
  */
 export async function runStructured<T>(db: Database, deps: AiDeps, ctx: AiContext, task: StructuredTask<T>): Promise<{ data: T; runId: string }> {
-  if (!deps.platformEnabled) throw new DomainError('conflict', 'AI_DISABLED', 'AI is turned off for this installation');
+  // Distinct from AI_DISABLED: only the server operator (ENABLE_AI) can lift this, not an org admin.
+  if (!deps.platformEnabled) throw new DomainError('conflict', 'AI_PLATFORM_DISABLED', 'AI is turned off for this installation');
   const [settings] = await db.select().from(aiSettings).where(eq(aiSettings.organizationId, ctx.organizationId));
   if (!settings?.enabled) throw new DomainError('conflict', 'AI_DISABLED', 'AI is turned off for your organization');
 

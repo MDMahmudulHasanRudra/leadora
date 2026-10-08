@@ -205,3 +205,66 @@ export interface Page<T> {
   items: T[];
   nextCursor?: string | null;
 }
+
+export const MODEL_PROFILES = ['fast', 'balanced', 'reasoning', 'embedding'] as const;
+export type ModelProfile = (typeof MODEL_PROFILES)[number];
+export type ModelPrice = { input: number; cachedInput: number; output: number };
+
+export interface AiSettings {
+  provider: 'openai';
+  enabled: boolean;
+  platformEnabled: boolean;
+  hasApiKey: boolean;
+  apiKeyLast4: string | null;
+  models: Partial<Record<ModelProfile, string>>;
+  features: Record<string, boolean>;
+  monthlyBudgetUsd: number | null;
+  prices: Record<string, ModelPrice>;
+  monthToDateSpendUsd: number;
+}
+
+export interface AiUsageTotals {
+  calls: number;
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+  failed: number;
+}
+
+export interface AiUsage {
+  today: AiUsageTotals;
+  month: AiUsageTotals;
+  byPurpose: (AiUsageTotals & { purpose: string })[];
+  byModel: (AiUsageTotals & { model: string })[];
+  byUser: (AiUsageTotals & { userId: string | null; fullName: string | null })[];
+}
+
+export interface PromptVersion {
+  version: number;
+  active: boolean;
+  modelProfile: ModelProfile;
+  maxOutputTokens: number;
+  systemPrompt: string;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface PromptInfo {
+  key: string;
+  description: string;
+  activeVersion: number;
+  builtin: { version: 0; systemPrompt: string; modelProfile: ModelProfile; maxOutputTokens: number };
+  versions: PromptVersion[];
+}
+
+export interface LeadAnalysis {
+  summary: string;
+  intent: string;
+  buyingSignal: 'NONE' | 'WEAK' | 'MODERATE' | 'STRONG';
+  urgency: 'LOW' | 'MEDIUM' | 'HIGH';
+  score: number;
+  objections: string[];
+  productInterest: string[];
+  recommendedAction: string;
+  rationale: string;
+}

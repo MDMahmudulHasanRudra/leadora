@@ -9,7 +9,7 @@ Follows spec §103–§114 and the sprint backlog in §148. Each phase is done o
 | 0 | Foundation: monorepo, Docker, CI, config, Postgres, Valkey, migrations, logging, health, basic web/API | **Done** (verified locally 2026-10-08; CI not yet run on GitHub) |
 | 1 | CRM MVP: auth, organizations, users, teams, RBAC, leads, contacts, companies, pipeline, assignment, follow-ups, tasks, notes, activities, dashboard | **Done** (2026-10-08) |
 | 2 | Communication: inbox, conversations, messages, realtime, email adapter, webhooks | Not started |
-| 3 | AI foundation: provider abstraction, OpenAI Responses API, settings, usage logging, prompt versioning, structured outputs | Not started |
+| 3 | AI foundation: provider abstraction, OpenAI Responses API, settings, usage logging, prompt versioning, structured outputs | Done |
 | 4 | AI intelligence: scoring, conversation analysis, summaries, reply assistant, next action, NL search | Not started |
 | 5 | Knowledge base / RAG with pgvector and citations | Not started |
 | 6 | Automation engine | Not started |
@@ -122,12 +122,14 @@ Follow-ups noted, not done:
 ### Decisions
 
 - **`packages/ai`** holds the `AiProvider` interface (`generateStructured`, `generateText`, `embed`) and an `OpenAiProvider` that calls the Responses and Embeddings HTTP APIs directly with `fetch`. That gives timeouts, retries on 429/5xx, and no SDK version drift. Business code never imports a provider (spec §2.3, rule 3).
-- **One gateway, `runAi`**, for every call: platform `ENABLE_AI`, then org settings (enabled and feature on), then monthly budget (block at 100%, spec §75), then the active prompt version, then provider, then Zod validation with one corrective retry (spec §30), then an `ai_runs` row (tokens, cached tokens, estimated cost, latency, status, error code, prompt version). A failed, blocked or invalid call never writes business data.
+- **One gateway, `runStructured`** (`packages/domain`), for every structured call: platform `ENABLE_AI`, then org settings (enabled and feature on), then monthly budget (block at 100%, spec §75), then the active prompt version, then provider, then Zod validation with one corrective retry (spec §30), then an `ai_runs` row (tokens, cached tokens, estimated cost, latency, status, error code, prompt version). A failed, blocked or invalid call never writes business data.
 - **Models** are logical profiles (`fast`, `balanced`, `reasoning`, `embedding`) mapped to model IDs in org settings (spec §123). Nothing is hard-coded. Prices per model are also org settings; if a price is missing, the cost is recorded as unknown rather than guessed.
 - **API key** is AES-GCM encrypted (`DATA_ENCRYPTION_KEY`). GET returns only `hasApiKey` and the last 4 characters (spec §74).
-- **Prompts** are versioned in `ai_prompts` / `ai_prompt_versions`. Built-in v1 defaults ship in code and are used until a version is activated (spec §29).
+- **Prompts** are versioned in `ai_prompt_versions` (one active per org and key). The built-in prompt ships in code as version 0 and is used until a version is activated; activating 0 reverts to it (spec §29).
+- **Lead analysis runs synchronously** on request (one call, typically a few seconds), so the UI shows the result immediately. Bulk and automatic analysis go through the `ai` queue in Phase 4.
+- **Connection test** makes one tiny `fast`-profile text call and logs it as `connection_test`, so admins can check the key before switching AI on.
 - **Prompt injection** (spec §56–57): CRM data and messages go into the input as delimited, labelled data blocks. The system prompt says that content is data, not instructions. Tools and authorization stay in code.
-- **AI is optional:** every AI endpoint fails fast with `AI_DISABLED` / `AI_NOT_CONFIGURED`, and the CRM never depends on it (spec §121).
+- **AI is optional:** every AI endpoint fails fast with `AI_PLATFORM_DISABLED` (ENABLE_AI off) / `AI_DISABLED` (org switch) / `AI_NOT_CONFIGURED`, and the CRM never depends on it (spec §121).
 
 ### Threat model additions
 
