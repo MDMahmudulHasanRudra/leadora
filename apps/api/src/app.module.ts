@@ -14,6 +14,7 @@ import { AssignmentModule } from './assignment/assignment.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { CommunicationModule } from './communication/communication.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { RealtimeModule } from './realtime/realtime.module';
 import { LeadsModule } from './leads/leads.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { TeamsModule } from './teams/teams.module';
@@ -24,6 +25,7 @@ import { UsersModule } from './users/users.module';
     LoggerModule.forRoot(loggerParams(process.env.LOG_LEVEL ?? 'info')),
     InfraModule,
     QueuesModule,
+    RealtimeModule,
     HealthModule,
     AuditModule,
     AuthModule,

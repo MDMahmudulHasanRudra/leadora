@@ -1,10 +1,12 @@
 import { RequestMethod } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import { WsAdapter } from '@nestjs/platform-ws';
 import cookieParser from 'cookie-parser';
 import { HttpExceptionFilter } from './common/http-exception.filter';
 
 export function configureApp(app: NestExpressApplication): void {
   app.use(cookieParser());
+  app.useWebSocketAdapter(new WsAdapter(app));
   // Inbound emails can exceed the 100 kB default.
   app.useBodyParser('json', { limit: '1mb' });
   app.useGlobalFilters(new HttpExceptionFilter());

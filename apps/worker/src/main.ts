@@ -26,8 +26,8 @@ const connection = { url: env.VALKEY_URL, maxRetriesPerRequest: null };
 const publisher = new Redis(env.VALKEY_URL, { maxRetriesPerRequest: 2 });
 const email = env.SMTP_URL ? new SmtpEmailProvider(env.SMTP_URL) : null;
 const providers: ChannelProviders = email ? { EMAIL: email } : {};
-const publish = async (organizationId: string, type: string, data: Record<string, unknown>) => {
-  await publisher.publish(REALTIME_CHANNEL, JSON.stringify({ organizationId, type, data })).catch(() => undefined);
+const publish = async (organizationId: string, type: string, data: Record<string, unknown>, userId?: string) => {
+  await publisher.publish(REALTIME_CHANNEL, JSON.stringify({ organizationId, type, data, ...(userId ? { userId } : {}) })).catch(() => undefined);
 };
 
 // Handlers are registered per queue as features land; unknown job names fail loudly.
@@ -43,6 +43,7 @@ const handlers: Partial<Record<QueueName, Record<string, (job: Job) => Promise<u
       const result = await processInboundEvent(db, job.data.eventId);
       if (result.status === 'PROCESSED' && result.organizationId) {
         await publish(result.organizationId, 'conversation.updated', { conversationId: result.conversationId });
+        if (result.notifyUserId) await publish(result.organizationId, 'notification.created', {}, result.notifyUserId);
       }
     },
   },
