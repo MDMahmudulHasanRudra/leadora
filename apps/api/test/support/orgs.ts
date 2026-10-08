@@ -1,7 +1,7 @@
 import { organizations, rolePermissions, roles, userRoles, users } from '@leadora/database';
 import { and, eq } from 'drizzle-orm';
 import { hashPassword } from '../../src/auth/password';
-import { seedDefaultRoles } from '../../src/auth/roles';
+import { initializeOrganization } from '../../src/organizations/defaults';
 import type { TestApp } from './app';
 import { login } from './fixtures';
 
@@ -11,7 +11,7 @@ export async function createOtherOrg(t: TestApp, slug: string) {
   const password = 'another strong password';
   await t.db.transaction(async (tx) => {
     const [org] = await tx.insert(organizations).values({ name: slug, slug }).returning();
-    const ids = await seedDefaultRoles(tx, org!.id);
+    const { roleIds: ids } = await initializeOrganization(tx, org!.id);
     const [user] = await tx
       .insert(users)
       .values({ organizationId: org!.id, email, fullName: 'Other Admin', status: 'ACTIVE', passwordHash: await hashPassword(password) })

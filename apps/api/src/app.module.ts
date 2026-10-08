@@ -5,6 +5,7 @@ import { AuthModule } from './auth/auth.module';
 import { loggerParams } from './common/logging';
 import { HealthModule } from './health/health.module';
 import { InfraModule } from './infra/infra.module';
+import { OrganizationsModule } from './organizations/organizations.module';
 import { TeamsModule } from './teams/teams.module';
 import { UsersModule } from './users/users.module';
 
@@ -17,6 +18,7 @@ import { UsersModule } from './users/users.module';
     AuthModule,
     UsersModule,
     TeamsModule,
+    OrganizationsModule,
   ],
 })
 export class AppModule {}

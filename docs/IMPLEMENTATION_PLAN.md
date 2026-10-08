@@ -72,14 +72,42 @@ Follow-ups noted, not done:
 8. Audit log API
 9. Web: login, first-run setup, authenticated shell, users & teams pages
 
-## Phase 1 — later sprints (3–4)
+## Phase 1 / Sprint 3 — Leads
 
-1. **Schema**: `teams`, `team_members`, `roles`, `permissions`, `role_permissions`, `user_roles`, `sessions`, `audit_logs`, `outbox_events`.
-2. **Auth**: email/password with Argon2id, HTTP-only session cookie, email verification and password reset tokens (hashed), rate limits on auth endpoints.
-3. **Tenancy guard**: request-scoped organization context resolved from the session, plus a repository helper that always applies `organization_id`. Postgres RLS evaluated as defense in depth (ADR to follow).
-4. **RBAC**: permission guard (`@RequirePermission('lead.assign')`), default roles seeded per organization.
-5. **Leads**: `leads`, `lead_sources`, `lead_tags`, `lead_tag_links`, `custom_field_definitions/values`, `CreateLeadCommand` ingestion path with normalizer, validator and deduplicator (spec §12–13).
-6. **Pipeline / assignment / follow-ups / tasks / notes / activities** (spec §16–20) with transactional activity writes (§117).
-7. **Web**: auth screens, lead list/detail, pipeline Kanban, follow-up list.
+### Decisions
 
-Acceptance: a user can take a lead from creation to conversion without manual database intervention.
+- Every organization gets a **default pipeline** (spec §16 stages) and **default lead sources** at creation. A migration backfills existing organizations.
+- A lead's lifecycle status *is* its pipeline stage. There's no separate `status` column to drift out of sync.
+- Every ingestion path (manual form now; CSV, webhook and API later) goes through one `ingestLead` function: **normalize → validate → deduplicate → insert → activity** (spec §12).
+- **Dedup** for now matches exact normalized email and exact normalized phone within the organization. A duplicate is never silently dropped: manual create returns 409 with the existing lead id. Fuzzy matching and merge come later.
+- **Phones** are normalized to E.164 with `libphonenumber-js`, using the organization's default country (`BD` unless changed).
+- **Ownership:** a new lead is owned by its creator unless `ownerUserId` is given. Giving the lead to someone else needs `lead.assign`.
+- **Visibility:** anyone with `lead.view` sees all of the organization's leads; "My leads" is a filter. Row-level visibility (agents see only their own) is a product decision to confirm before Phase 2.
+- **Delete = archive** (`archived_at`). Leads are never hard-deleted from the API (spec §9, §13).
+- **Company** stays free text on the lead (`company_name`) until lead conversion creates Company and Contact records in Sprint 4.
+
+### Threat model additions
+
+| Threat | Abuse case | Mitigation | Test |
+| --- | --- | --- | --- |
+| Elevation | Agent assigns leads to others | `lead.assign` required for any owner other than self | agent → 403 |
+| Info disclosure | Reading or editing another org's lead, stage, tag or owner by id | every lookup scoped by `organization_id`; owner, stage and source ids validated in the same org | cross-org → 404 / 422 |
+| Tampering | Moving a lead to a stage of another pipeline | stage must belong to the lead's pipeline | 422 |
+| DoS | Huge search strings or page sizes | `q` ≤ 100 chars, `limit` ≤ 100 | 422 |
+| Injection | Search text with SQL wildcards or quotes | parameterized `ILIKE` with `%`/`_` escaped | search for `%` matches literally |
+
+### Slices
+
+1. Schema + organization initialization: pipelines, stages, sources (with backfill)
+2. Create lead via `ingestLead`, plus get lead, with a `lead.created` activity
+3. List leads: filters (stage, owner incl. `me`/`unassigned`, source, tag, temperature, search) + cursor pagination
+4. Update lead: fields, stage, owner, tags; archive; activities for each change
+5. Web: leads list with filters, create form, lead detail with timeline
+6. CSV import (async via worker) with per-row report
+7. Custom fields
+
+## Phase 1 / Sprint 4 — Pipeline, assignment, follow-ups
+
+Pipeline Kanban, assignment rules, follow-ups, tasks, notes, lead conversion to Contact + Company.
+
+Acceptance (Phase 1): a user can take a lead from creation to conversion without manual database intervention.

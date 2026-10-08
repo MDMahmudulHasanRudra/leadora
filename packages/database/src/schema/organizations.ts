@@ -8,6 +8,8 @@ export const organizations = pgTable('organizations', {
   timezone: text().notNull().default('UTC'),
   defaultCurrency: varchar({ length: 3 }).notNull().default('USD'),
   defaultLocale: varchar({ length: 10 }).notNull().default('en'),
+  // ISO 3166-1 alpha-2; used to normalize phone numbers written without a country code.
+  defaultCountry: varchar({ length: 2 }).notNull().default('BD'),
   ...timestamps,
 });
 

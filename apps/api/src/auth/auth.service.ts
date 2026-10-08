@@ -17,7 +17,7 @@ import type { LoginInput, RegisterInput } from './auth.schemas';
 import { IdentityService } from './identity.service';
 import { LoginRateLimiter } from './login-rate-limiter';
 import { burnPasswordCheck, hashPassword, verifyPassword } from './password';
-import { seedDefaultRoles } from './roles';
+import { initializeOrganization } from '../organizations/defaults';
 import { SessionsService } from './sessions.service';
 
 const invalidCredentials = () =>
@@ -109,7 +109,7 @@ export class AuthService {
             timezone: input.timezone ?? 'UTC',
           })
           .returning();
-        const roleIds = await seedDefaultRoles(tx, org!.id);
+        const { roleIds } = await initializeOrganization(tx, org!.id);
         const [user] = await tx
           .insert(users)
           .values({

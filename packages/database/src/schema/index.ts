@@ -4,3 +4,5 @@ export * from './access';
 export * from './sessions';
 export * from './audit';
 export * from './teams';
+export * from './pipelines';
+export * from './lead-sources';
