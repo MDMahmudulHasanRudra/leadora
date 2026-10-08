@@ -42,14 +42,24 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
         title={params.get('archived') === 'true' ? 'Archived leads' : 'Leads'}
         description="Everyone who might buy from you, newest first."
         actions={
-          identity.permissions.includes('lead.create') && (
-            <Link
-              href="/leads/new"
-              className="inline-flex h-9 items-center rounded-md bg-brand-600 px-3.5 text-sm font-medium text-white hover:bg-brand-500"
-            >
-              New lead
-            </Link>
-          )
+          <div className="flex gap-2">
+            {identity.permissions.includes('lead.import') && (
+              <Link
+                href="/leads/import"
+                className="inline-flex h-9 items-center rounded-md border border-zinc-300 bg-white px-3.5 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+              >
+                Import CSV
+              </Link>
+            )}
+            {identity.permissions.includes('lead.create') && (
+              <Link
+                href="/leads/new"
+                className="inline-flex h-9 items-center rounded-md bg-brand-600 px-3.5 text-sm font-medium text-white hover:bg-brand-500"
+              >
+                New lead
+              </Link>
+            )}
+          </div>
         }
       />
 

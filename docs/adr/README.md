@@ -16,3 +16,4 @@ Format: Context → Decision → Consequences. Status is `Accepted` unless noted
 | [010](ADR-010-drizzle-orm.md) | Drizzle ORM + SQL migrations |
 | [011](ADR-011-toolchain.md) | Toolchain versions & test runners |
 | [012](ADR-012-sessions-and-identity.md) | Opaque sessions, platform-unique email, code-defined permissions |
+| [013](ADR-013-domain-package.md) | Framework-free `@leadora/domain` shared by API and worker |
