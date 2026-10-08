@@ -7,7 +7,7 @@ Follows spec §103–§114 and the sprint backlog in §148. Each phase is done o
 | Phase | Scope | Status |
 | --- | --- | --- |
 | 0 | Foundation: monorepo, Docker, CI, config, Postgres, Valkey, migrations, logging, health, basic web/API | **Done** (verified locally 2026-10-08; CI not yet run on GitHub) |
-| 1 | CRM MVP: auth, organizations, users, teams, RBAC, leads, contacts, companies, pipeline, assignment, follow-ups, tasks, notes, activities, dashboard | **Sprint 2 done** (auth, tenancy, RBAC, users, teams, audit, web). Sprint 3 (leads) next |
+| 1 | CRM MVP: auth, organizations, users, teams, RBAC, leads, contacts, companies, pipeline, assignment, follow-ups, tasks, notes, activities, dashboard | **Done** (2026-10-08) |
 | 2 | Communication: inbox, conversations, messages, realtime, email adapter, webhooks | Not started |
 | 3 | AI foundation: provider abstraction, OpenAI Responses API, settings, usage logging, prompt versioning, structured outputs | Not started |
 | 4 | AI intelligence: scoring, conversation analysis, summaries, reply assistant, next action, NL search | Not started |
@@ -119,6 +119,16 @@ Follow-ups noted, not done:
 
 ## Phase 1 / Sprint 4 — Pipeline, assignment, follow-ups
 
-Pipeline Kanban, assignment rules, follow-ups, tasks, notes, lead conversion to Contact + Company.
+Pipeline Kanban, assignment rules, follow-ups, tasks, notes, lead conversion to Contact + Company, dashboard metrics.
+
+**Status (2026-10-08): done.** Acceptance met and verified in the browser. A lead was created, moved on the Kanban by drag-and-drop, given a note and a follow-up, the follow-up completed with an outcome, then the lead was converted to a contact, all without database intervention.
+
+Decisions:
+- Notes are immutable timeline activities (
+ote.added), not a separate editable table.
+- Tasks and contacts/companies reuse existing permission keys (ollowup.*, lead.*); the spec defines no 	ask.* or contact.* keys.
+- Opportunities are not a separate entity yet. Forecasting uses lead budget × stage probability (spec §46).
+- Assignment rules apply to automatic intake (CSV with auto-assign; webhooks/API later) and on demand; manual entry keeps the creator as owner.
+- The dashboard's follow-up metric is "due in the next 24 hours" plus "overdue", which avoids timezone edge cases around "today".
 
 Acceptance (Phase 1): a user can take a lead from creation to conversion without manual database intervention.

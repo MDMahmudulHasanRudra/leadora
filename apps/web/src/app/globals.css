@@ -9,6 +9,15 @@
 
 :root {
   color-scheme: light dark;
+  /* Chart tokens: reference palette sequential blue (dataviz skill) */
+  --viz-bar: #2a78d6;
+  --viz-track: #f0efec;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --viz-bar: #3987e5;
+    --viz-track: #2c2c2a;
+  }
 }
 
 body {

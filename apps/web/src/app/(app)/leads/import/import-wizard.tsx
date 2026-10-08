@@ -132,7 +132,8 @@ export function ImportWizard({
     setError(null);
     try {
       const body: Record<string, unknown> = { mapping: Object.fromEntries(Object.entries(mapping).filter(([, v]) => v)) };
-      if (owners) body.ownerUserId = owner || null;
+      if (owner === 'auto') body.autoAssign = true;
+      else if (owners) body.ownerUserId = owner || null;
       await api(`/lead-imports/${uploaded.id}/start`, { method: 'POST', body });
       setImportId(uploaded.id);
       setUploaded(null);
@@ -207,6 +208,7 @@ export function ImportWizard({
                     {o.id === currentUserId ? `${o.fullName} (me)` : o.fullName}
                   </option>
                 ))}
+                <option value="auto">Automatic (assignment rules)</option>
                 <option value="">Nobody (unassigned)</option>
               </Select>
             </label>

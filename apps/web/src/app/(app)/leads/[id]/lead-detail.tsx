@@ -2,11 +2,14 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
-import { Alert, Button, Card, formatDateTime, Select } from '@/components/ui';
+import { type FormEvent, useState } from 'react';
+import { FollowupList } from '@/components/followup-list';
+import { TaskList } from '@/components/task-list';
+import { Alert, Button, Card, formatDateTime, Input, Select } from '@/components/ui';
 import { api, ApiError } from '@/lib/api-client';
 import { formatCustomValue } from '@/components/custom-field-input';
-import type { Activity, CustomFieldDef, Lead, Stage } from '@/lib/types';
+import { type Activity, type CustomFieldDef, FOLLOWUP_TYPES, type Followup, type Lead, type Stage, type Task } from '@/lib/types';
+import { NewTaskForm } from '../../tasks/new-task-form';
 import { LeadForm } from '../lead-form';
 import { PriorityBadge, StageBadge } from '../lead-bits';
 
@@ -15,11 +18,13 @@ type Person = { id: string; fullName: string; active: boolean };
 interface Props {
   lead: Lead;
   activities: Activity[];
+  followups: Followup[];
+  tasks: Task[];
   customFields: CustomFieldDef[];
   stages: Stage[];
   users: Person[];
   timeZone: string;
-  can: { update: boolean; assign: boolean; archive: boolean };
+  can: { update: boolean; assign: boolean; archive: boolean; followup: boolean };
 }
 
 const FIELD_LABELS: Record<string, string> = {
@@ -29,7 +34,7 @@ const FIELD_LABELS: Record<string, string> = {
   sourceId: 'source',
 };
 
-export function LeadDetail({ lead, activities, customFields, stages, users, timeZone, can }: Props) {
+export function LeadDetail({ lead, activities, followups, tasks, customFields, stages, users, timeZone, can }: Props) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,9 +78,47 @@ export function LeadDetail({ lead, activities, customFields, stages, users, time
         return 'archived it';
       case 'lead.restored':
         return 'restored it';
+      case 'lead.converted':
+        return p.mergedContact ? 'converted it, merging into an existing contact' : 'converted it to a contact';
+      case 'note.added':
+        return 'added a note';
+      case 'followup.created':
+        return `scheduled a ${String(p.type).toLowerCase()} for ${formatDateTime(String(p.scheduledAt), timeZone)}`;
+      case 'followup.completed':
+        return `completed a ${String(p.type).toLowerCase()}${p.outcome ? `: ${p.outcome}` : ''}`;
+      case 'followup.skipped':
+        return `skipped a ${String(p.type).toLowerCase()}`;
+      case 'followup.cancelled':
+        return `cancelled a ${String(p.type).toLowerCase()}`;
+      case 'followup.rescheduled':
+        return `rescheduled a ${String(p.type).toLowerCase()} to ${formatDateTime(String(p.to), timeZone)}`;
       default:
         return a.type;
     }
+  }
+
+  async function addNote(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const body = String(new FormData(form).get('note') ?? '').trim();
+    if (!body) return;
+    await run(() => api(`/leads/${lead.id}/notes`, { method: 'POST', body: { body } }));
+    form.reset();
+  }
+
+  async function scheduleFollowup(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const data = new FormData(form);
+    const when = String(data.get('when') ?? '');
+    if (!when) return;
+    await run(() =>
+      api(`/leads/${lead.id}/followups`, {
+        method: 'POST',
+        body: { type: data.get('type'), scheduledAt: new Date(when).toISOString(), notes: String(data.get('fnotes') ?? '') || undefined },
+      }),
+    );
+    form.reset();
   }
 
   return (
@@ -97,6 +140,27 @@ export function LeadDetail({ lead, activities, customFields, stages, users, time
             </div>
           </div>
           <div className="flex gap-2">
+            {lead.contactId ? (
+              <Link
+                href={`/contacts/${lead.contactId}`}
+                className="inline-flex h-9 items-center rounded-md border border-zinc-300 px-3.5 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              >
+                View contact
+              </Link>
+            ) : (
+              can.update &&
+              !archived && (
+                <Button
+                  disabled={busy}
+                  onClick={() =>
+                    confirm(`Convert ${lead.fullName} into a contact${lead.companyName ? ` at ${lead.companyName}` : ''}?`) &&
+                    run(() => api(`/leads/${lead.id}/convert`, { method: 'POST' }))
+                  }
+                >
+                  Convert
+                </Button>
+              )
+            )}
             {can.update && !archived && !editing && (
               <Button variant="secondary" onClick={() => setEditing(true)}>
                 Edit
@@ -225,18 +289,77 @@ export function LeadDetail({ lead, activities, customFields, stages, users, time
         </div>
       )}
 
+      <div className="grid gap-6 lg:grid-cols-2">
+        <section>
+          <h2 className="mb-3 text-sm font-medium text-zinc-500">Follow-ups</h2>
+          <Card>
+            {can.followup && !archived && (
+              <form onSubmit={scheduleFollowup} className="flex flex-wrap gap-2 border-b border-zinc-100 p-3 dark:border-zinc-800">
+                <Select name="type" aria-label="Follow-up type" className="h-8 w-auto">
+                  {FOLLOWUP_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {t.charAt(0) + t.slice(1).toLowerCase()}
+                    </option>
+                  ))}
+                </Select>
+                <Input name="when" type="datetime-local" required aria-label="When" className="h-8 w-auto" />
+                <Input name="fnotes" placeholder="Note (optional)" aria-label="Follow-up note" maxLength={2000} className="h-8 min-w-32 flex-1" />
+                <Button type="submit" className="h-8" disabled={busy}>
+                  Schedule
+                </Button>
+              </form>
+            )}
+            <FollowupList items={followups} timeZone={timeZone} showLead={false} />
+          </Card>
+        </section>
+
+        <section>
+          <h2 className="mb-3 text-sm font-medium text-zinc-500">Tasks</h2>
+          <Card>
+            {can.followup && !archived && (
+              <div className="border-b border-zinc-100 p-3 dark:border-zinc-800">
+                <NewTaskForm leadId={lead.id} />
+              </div>
+            )}
+            <TaskList items={tasks} timeZone={timeZone} showLead={false} />
+          </Card>
+        </section>
+      </div>
+
       <section>
         <h2 className="mb-3 text-sm font-medium text-zinc-500">Timeline</h2>
         <Card>
+          {can.update && !archived && (
+            <form onSubmit={addNote} className="flex gap-2 border-b border-zinc-100 p-3 dark:border-zinc-800">
+              <textarea
+                name="note"
+                rows={2}
+                maxLength={5000}
+                placeholder="Add a note — what happened, what was agreed…"
+                aria-label="New note"
+                className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              />
+              <Button type="submit" disabled={busy} className="self-end">
+                Add note
+              </Button>
+            </form>
+          )}
           <ol className="divide-y divide-zinc-100 dark:divide-zinc-800">
             {activities.map((a) => (
-              <li key={a.id} className="flex flex-wrap justify-between gap-2 px-4 py-3 text-sm">
-                <span>
-                  <span className="font-medium">{a.actor?.fullName ?? 'System'}</span> {describe(a)}
-                </span>
-                <time className="text-xs text-zinc-500 tabular-nums" dateTime={a.createdAt}>
-                  {formatDateTime(a.createdAt, timeZone)}
-                </time>
+              <li key={a.id} className="px-4 py-3 text-sm">
+                <div className="flex flex-wrap justify-between gap-2">
+                  <span>
+                    <span className="font-medium">{a.actor?.fullName ?? 'System'}</span> {describe(a)}
+                  </span>
+                  <time className="text-xs text-zinc-500 tabular-nums" dateTime={a.createdAt}>
+                    {formatDateTime(a.createdAt, timeZone)}
+                  </time>
+                </div>
+                {a.type === 'note.added' && (
+                  <p className="mt-1 rounded-md bg-amber-50 px-3 py-2 whitespace-pre-wrap text-zinc-800 dark:bg-amber-950/40 dark:text-zinc-200">
+                    {String(a.payload?.body ?? '')}
+                  </p>
+                )}
               </li>
             ))}
           </ol>

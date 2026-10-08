@@ -1,52 +1,126 @@
+import Link from 'next/link';
 import { Card, PageHeader } from '@/components/ui';
-import { getIdentity } from '@/lib/api-server';
+import { getIdentity, requireData } from '@/lib/api-server';
+import { formatAmount, formatNumber, formatPercent } from '@/lib/format';
+import type { Dashboard } from '@/lib/types';
+import { StageBars } from './stage-bars';
 
-type Check = { status: 'up' | 'down'; latencyMs: number; error?: string };
-type Readiness = { status: 'ok' | 'error'; checks: Record<string, Check> };
+export const dynamic = 'force-dynamic';
 
-async function getReadiness(): Promise<Readiness | null> {
-  const base = process.env.API_INTERNAL_URL ?? 'http://localhost:3001';
-  try {
-    const res = await fetch(`${base}/health/ready`, { cache: 'no-store', signal: AbortSignal.timeout(3000) });
-    return (await res.json()) as Readiness;
-  } catch {
-    return null;
-  }
+function Tile({ label, value, sub, href, alert }: { label: string; value: string; sub?: string; href?: string; alert?: boolean }) {
+  const body = (
+    <Card className={`h-full p-4 ${href ? 'transition-colors hover:border-brand-500' : ''}`}>
+      <p className="text-xs text-zinc-500">{label}</p>
+      <p className="mt-1 text-2xl font-semibold">{value}</p>
+      {sub && (
+        <p className={`mt-0.5 text-xs ${alert ? 'font-medium text-red-700 dark:text-red-400' : 'text-zinc-500'}`}>
+          {alert && <span aria-hidden>⚠ </span>}
+          {sub}
+        </p>
+      )}
+    </Card>
+  );
+  return href ? (
+    <Link href={href} className="block">
+      {body}
+    </Link>
+  ) : (
+    body
+  );
 }
 
-const LABELS: Record<string, string> = { postgres: 'PostgreSQL', valkey: 'Valkey' };
-
 export default async function DashboardPage() {
-  const [identity, readiness] = await Promise.all([getIdentity(), getReadiness()]);
-  const services: Array<[string, boolean, string]> = [
-    ['API', readiness !== null, readiness ? 'reachable' : 'unreachable'],
-    ...Object.entries(readiness?.checks ?? {}).map(([name, c]): [string, boolean, string] => [
-      LABELS[name] ?? name,
-      c.status === 'up',
-      c.status === 'up' ? `${c.latencyMs} ms` : (c.error ?? 'down'),
-    ]),
-  ];
+  const [identity, d] = await Promise.all([getIdentity(), requireData<Dashboard>('/analytics/dashboard?days=30')]);
+  const t = d.totals;
 
   return (
     <>
       <PageHeader
         title={`Welcome, ${identity?.user.fullName.split(' ')[0] ?? 'there'}`}
-        description="Leads, pipeline and AI insights arrive in the next phases."
+        description={d.scope === 'organization' ? 'Your whole organization, last 30 days where noted.' : 'Your leads and follow-ups, last 30 days where noted.'}
       />
-      <Card className="p-5">
-        <h2 className="text-sm font-medium text-zinc-500">System status</h2>
-        <ul className="mt-4 divide-y divide-zinc-100 dark:divide-zinc-800">
-          {services.map(([name, up, detail]) => (
-            <li key={name} className="flex items-center justify-between py-2.5 text-sm">
-              <span className="flex items-center gap-2">
-                <span className={`inline-block size-2 rounded-full ${up ? 'bg-emerald-500' : 'bg-red-500'}`} aria-hidden />
-                {name}
-              </span>
-              <span className="text-zinc-500 tabular-nums">{detail}</span>
-            </li>
-          ))}
-        </ul>
-      </Card>
+
+      <section aria-label="Key numbers" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Tile label="Open leads" value={formatNumber(t.open)} sub={`${formatNumber(t.newInPeriod)} new in 30 days`} href="/leads" />
+        <Tile label="Won" value={formatNumber(t.won)} sub={`${formatPercent(t.conversionRate)} of all leads`} />
+        <Tile
+          label="Pipeline value"
+          value={formatAmount(d.value.pipeline)}
+          sub={`${formatAmount(d.value.weightedPipeline)} weighted by stage`}
+          href="/pipeline"
+        />
+        <Tile
+          label="Follow-ups due (24h)"
+          value={formatNumber(t.followupsDueNext24h)}
+          sub={t.overdueFollowups ? `${formatNumber(t.overdueFollowups)} overdue` : 'None overdue'}
+          alert={t.overdueFollowups > 0}
+          href="/followups"
+        />
+      </section>
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-5">
+        <Card className="p-5 lg:col-span-3">
+          <h2 className="text-sm font-medium">Leads by stage</h2>
+          <p className="mb-4 text-xs text-zinc-500">Active leads in the default pipeline</p>
+          <StageBars stages={d.byStage} />
+        </Card>
+
+        <Card className="p-5 lg:col-span-2">
+          <h2 className="mb-3 text-sm font-medium">Sources</h2>
+          {d.bySource.length === 0 ? (
+            <p className="text-sm text-zinc-500">No leads yet.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="text-left text-xs text-zinc-500">
+                <tr>
+                  <th className="pb-2 font-medium">Source</th>
+                  <th className="pb-2 text-right font-medium">Leads</th>
+                  <th className="pb-2 text-right font-medium">Won</th>
+                  <th className="pb-2 text-right font-medium">Rate</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 tabular-nums dark:divide-zinc-800">
+                {d.bySource.map((s) => (
+                  <tr key={s.id}>
+                    <td className="py-2">{s.name}</td>
+                    <td className="py-2 text-right">{formatNumber(s.leads)}</td>
+                    <td className="py-2 text-right">{formatNumber(s.won)}</td>
+                    <td className="py-2 text-right">{formatPercent(s.conversionRate)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
+      </div>
+
+      {d.team && (
+        <Card className="mt-6 overflow-x-auto p-5">
+          <h2 className="mb-3 text-sm font-medium">Team performance</h2>
+          <table className="w-full min-w-[480px] text-sm">
+            <thead className="text-left text-xs text-zinc-500">
+              <tr>
+                <th className="pb-2 font-medium">Member</th>
+                <th className="pb-2 text-right font-medium">Leads</th>
+                <th className="pb-2 text-right font-medium">Open</th>
+                <th className="pb-2 text-right font-medium">Won</th>
+                <th className="pb-2 text-right font-medium">Conversion</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-100 tabular-nums dark:divide-zinc-800">
+              {d.team.map((m) => (
+                <tr key={m.userId}>
+                  <td className="py-2">{m.fullName}</td>
+                  <td className="py-2 text-right">{formatNumber(m.leads)}</td>
+                  <td className="py-2 text-right">{formatNumber(m.open)}</td>
+                  <td className="py-2 text-right">{formatNumber(m.won)}</td>
+                  <td className="py-2 text-right">{formatPercent(m.conversionRate)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
     </>
   );
 }

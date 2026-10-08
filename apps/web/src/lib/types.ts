@@ -93,8 +93,13 @@ export interface Lead {
   location: string | null;
   industry: string | null;
   notes: string | null;
+  budget: number | null;
   priority: Priority;
   score: number | null;
+  contactId: string | null;
+  companyId: string | null;
+  nextFollowupAt: string | null;
+  lastContactedAt: string | null;
   temperature: 'COLD' | 'WARM' | 'HOT' | null;
   pipelineId: string;
   source: { id: string; name: string; type: string };
@@ -114,6 +119,86 @@ export interface Activity {
   payload: Record<string, unknown> | null;
   createdAt: string;
   actor: { id: string; fullName: string } | null;
+}
+
+export type FollowupType = 'CALL' | 'EMAIL' | 'MESSAGE' | 'MEETING' | 'CUSTOM';
+export const FOLLOWUP_TYPES: FollowupType[] = ['CALL', 'EMAIL', 'MESSAGE', 'MEETING', 'CUSTOM'];
+
+export interface Followup {
+  id: string;
+  type: FollowupType;
+  status: 'PENDING' | 'COMPLETED' | 'SKIPPED' | 'CANCELLED';
+  priority: Priority;
+  scheduledAt: string;
+  notes: string | null;
+  outcome: string | null;
+  completedAt: string | null;
+  overdue: boolean;
+  lead: { id: string; fullName: string };
+  assignee: { id: string; fullName: string } | null;
+}
+
+export interface Task {
+  id: string;
+  title: string;
+  description: string | null;
+  status: 'OPEN' | 'DONE';
+  priority: Priority;
+  dueAt: string | null;
+  checklist: { text: string; done: boolean }[];
+  completedAt: string | null;
+  lead: { id: string; fullName: string } | null;
+  assignee: { id: string; fullName: string } | null;
+}
+
+export interface ContactRow {
+  id: string;
+  fullName: string;
+  email: string | null;
+  phone: string | null;
+  jobTitle: string | null;
+  companyId: string | null;
+  companyName: string | null;
+}
+
+export interface CompanyRow {
+  id: string;
+  name: string;
+  industry: string | null;
+  domain: string | null;
+}
+
+export interface Dashboard {
+  scope: 'organization' | 'mine';
+  periodDays: number;
+  totals: {
+    leads: number;
+    open: number;
+    won: number;
+    lost: number;
+    hot: number;
+    unassigned: number;
+    newInPeriod: number;
+    convertedInPeriod: number;
+    conversionRate: number;
+    followupsDueNext24h: number;
+    overdueFollowups: number;
+  };
+  value: { won: number; pipeline: number; weightedPipeline: number };
+  byStage: { id: string; key: string; name: string; color: string; outcome: string; count: number; value: number }[];
+  bySource: { id: string; name: string; type: string; leads: number; won: number; conversionRate: number }[];
+  team?: { userId: string; fullName: string; leads: number; open: number; won: number; conversionRate: number }[];
+}
+
+export interface AssignmentRule {
+  id: string;
+  name: string;
+  position: number;
+  enabled: boolean;
+  strategy: 'USER' | 'ROUND_ROBIN' | 'LEAST_LOADED';
+  conditions: { sourceTypes?: string[]; countries?: string[]; tags?: string[]; priorities?: string[] };
+  targetUserId: string | null;
+  targetTeamId: string | null;
 }
 
 export interface Page<T> {
