@@ -22,7 +22,7 @@ const SECTIONS: { title?: string; items: NavItem[] }[] = [
       { label: 'Inbox', href: '/inbox', permission: 'conversation.view' },
       { label: 'Knowledge Base', href: '/knowledge', permission: 'knowledge.view' },
       { label: 'AI Assistant', href: '/assistant', permission: 'ai.use' },
-      { label: 'Automations', phase: 6 },
+      { label: 'Automations', href: '/automations', permission: 'automation.view' },
       { label: 'Analytics', phase: 8 },
     ],
   },

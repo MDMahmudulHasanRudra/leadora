@@ -330,3 +330,62 @@ export interface KbCitation {
   sourceUrl: string | null;
   snippet: string;
 }
+export interface AutomationCondition {
+  field: string;
+  op: string;
+  value?: unknown;
+}
+
+export interface AutomationAction {
+  type: string;
+  params: Record<string, unknown>;
+}
+
+export interface AutomationRule {
+  id: string;
+  name: string;
+  description: string | null;
+  enabled: boolean;
+  trigger: string;
+  triggerConfig: { days?: number };
+  conditions: AutomationCondition[];
+  actions: AutomationAction[];
+  priority: number;
+  cooldownMinutes: number;
+  version: number;
+  stats?: { runs7d: number; failed7d: number; lastRunAt: string | null };
+}
+
+export interface AutomationStep {
+  index: number;
+  type: string;
+  status: 'SUCCEEDED' | 'FAILED' | 'SKIPPED';
+  output?: Record<string, unknown> | null;
+  error?: string | null;
+  at: string;
+}
+
+export interface AutomationRun {
+  id: string;
+  ruleId: string;
+  ruleVersion: number;
+  ruleName: string;
+  trigger: string;
+  leadId: string | null;
+  leadName: string | null;
+  status: 'QUEUED' | 'RUNNING' | 'RETRYING' | 'SUCCEEDED' | 'FAILED';
+  steps: AutomationStep[];
+  stepCount: number;
+  error: string | null;
+  attempts: number;
+  depth: number;
+  createdAt: string;
+  finishedAt: string | null;
+}
+
+export interface AutomationMeta {
+  triggers: string[];
+  conditionFields: { key: string; label: string; type: 'enum' | 'number' | 'text' | 'tags'; options?: string[] }[];
+  operators: string[];
+  actions: string[];
+}
