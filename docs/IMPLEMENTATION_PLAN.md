@@ -111,7 +111,7 @@ Follow-ups noted, not done:
 6. CSV import with a per-row report: upload → column mapping → queued job → worker runs `processLeadImport` from `@leadora/domain`, row by row through `ingestLead`
 7. Custom fields
 
-**Status (2026-10-08):** slices 1–6 are done and committed. Custom fields (slice 7) are next. Verified with 94 API integration, 17 domain and 4 worker tests, plus mutation checks on LIKE escaping and formula escaping. In the browser: create, duplicate warning, edit, clear a field, stage and owner changes, archive, filters, and a full CSV import through the real worker.
+**Status (2026-10-08):** Sprint 3 is complete (slices 1–7, including custom fields with a settings UI). Verified with 94 API integration, 17 domain and 4 worker tests, plus mutation checks on LIKE escaping and formula escaping. In the browser: create, duplicate warning, edit, clear a field, stage and owner changes, archive, filters, and a full CSV import through the real worker.
 
 Follow-ups noted, not done:
 - Uploaded CSV content is stored in Postgres (≤ 5 MB); move it to object storage when the storage provider lands, and purge it after the import finishes.

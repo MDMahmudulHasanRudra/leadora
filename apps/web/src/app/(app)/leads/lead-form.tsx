@@ -3,14 +3,16 @@
 import Link from 'next/link';
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { Alert, Button, Field, Input, Select } from '@/components/ui';
+import { CustomFieldInput, readCustomFields } from '@/components/custom-field-input';
 import { ApiError } from '@/lib/api-client';
-import { type Lead, PRIORITIES, type Stage } from '@/lib/types';
+import { type CustomFieldDef, type Lead, PRIORITIES, type Stage } from '@/lib/types';
 import { titleCase } from './lead-bits';
 
 export interface LeadFormProps {
   initial?: Lead;
   stages?: Stage[];
   owners?: { id: string; fullName: string }[];
+  customFields?: CustomFieldDef[];
   submitLabel: string;
   onSubmit: (body: Record<string, unknown>) => Promise<void>;
   onCancel?: () => void;
@@ -19,7 +21,7 @@ export interface LeadFormProps {
 const TEXT = ['fullName', 'email', 'phone', 'companyName', 'jobTitle', 'location', 'industry', 'notes'] as const;
 
 /** Create sends only filled fields; edit sends every text field so emptied ones are cleared. */
-function toBody(form: FormData, editing: boolean): Record<string, unknown> {
+function toBody(form: FormData, editing: boolean, defs: CustomFieldDef[]): Record<string, unknown> {
   const body: Record<string, unknown> = {};
   for (const key of TEXT) {
     const value = String(form.get(key) ?? '').trim();
@@ -32,10 +34,11 @@ function toBody(form: FormData, editing: boolean): Record<string, unknown> {
     .filter(Boolean);
   if (form.has('stageId')) body.stageId = form.get('stageId');
   if (form.has('ownerUserId')) body.ownerUserId = form.get('ownerUserId') || null;
+  if (defs.length) body.customFields = readCustomFields(form, defs, editing);
   return body;
 }
 
-export function LeadForm({ initial, stages, owners, submitLabel, onSubmit, onCancel }: LeadFormProps) {
+export function LeadForm({ initial, stages, owners, customFields = [], submitLabel, onSubmit, onCancel }: LeadFormProps) {
   const [error, setError] = useState<ApiError | null>(null);
   const [pending, setPending] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
@@ -53,7 +56,7 @@ export function LeadForm({ initial, stages, owners, submitLabel, onSubmit, onCan
     setPending(true);
     setError(null);
     try {
-      await onSubmit(toBody(new FormData(e.currentTarget), !!initial));
+      await onSubmit(toBody(new FormData(e.currentTarget), !!initial, customFields));
     } catch (err) {
       setError(err instanceof ApiError ? err : new ApiError(0, 'NETWORK', 'Could not reach the server. Please try again.'));
     } finally {
@@ -133,6 +136,11 @@ export function LeadForm({ initial, stages, owners, submitLabel, onSubmit, onCan
           </Select>
         </Field>
       )}
+      {customFields.map((def) => (
+        <div key={def.id} className={def.type === 'long_text' || def.type === 'multi_select' ? 'sm:col-span-2' : undefined}>
+          <CustomFieldInput def={def} value={initial?.customFields[def.key]} error={fe(`customFields.${def.key}`)} />
+        </div>
+      ))}
       <div className="sm:col-span-2">
         <Field label="Tags" htmlFor="tags" error={fe('tags')} hint="Separate with commas, e.g. VIP, Dhaka">
           <Input id="tags" name="tags" defaultValue={initial?.tags.join(', ') ?? ''} />

@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Alert, Button, Card, formatDateTime, Select } from '@/components/ui';
 import { api, ApiError } from '@/lib/api-client';
-import type { Activity, Lead, Stage } from '@/lib/types';
+import { formatCustomValue } from '@/components/custom-field-input';
+import type { Activity, CustomFieldDef, Lead, Stage } from '@/lib/types';
 import { LeadForm } from '../lead-form';
 import { PriorityBadge, StageBadge } from '../lead-bits';
 
@@ -14,6 +15,7 @@ type Person = { id: string; fullName: string; active: boolean };
 interface Props {
   lead: Lead;
   activities: Activity[];
+  customFields: CustomFieldDef[];
   stages: Stage[];
   users: Person[];
   timeZone: string;
@@ -27,7 +29,7 @@ const FIELD_LABELS: Record<string, string> = {
   sourceId: 'source',
 };
 
-export function LeadDetail({ lead, activities, stages, users, timeZone, can }: Props) {
+export function LeadDetail({ lead, activities, customFields, stages, users, timeZone, can }: Props) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,7 +66,7 @@ export function LeadDetail({ lead, activities, stages, users, timeZone, can }: P
       case 'lead.updated': {
         const changes = (p.changes ?? {}) as Record<string, { from: unknown; to: unknown }>;
         return `updated ${Object.keys(changes)
-          .map((k) => FIELD_LABELS[k] ?? k)
+          .map((k) => FIELD_LABELS[k] ?? customFields.find((d) => `customFields.${d.key}` === k)?.label ?? k)
           .join(', ')}`;
       }
       case 'lead.archived':
@@ -124,6 +126,7 @@ export function LeadDetail({ lead, activities, stages, users, timeZone, can }: P
         <Card className="p-5">
           <LeadForm
             initial={lead}
+            customFields={customFields}
             submitLabel="Save changes"
             onCancel={() => setEditing(false)}
             onSubmit={async (body) => {
@@ -144,6 +147,7 @@ export function LeadDetail({ lead, activities, stages, users, timeZone, can }: P
                 ['Industry', lead.industry],
                 ['Source', lead.source.name],
                 ['Added', formatDateTime(lead.createdAt, timeZone)],
+                ...customFields.map((def) => [def.label, formatCustomValue(def, lead.customFields[def.key])]),
               ].map(([label, value]) => (
                 <div key={label as string}>
                   <dt className="text-xs text-zinc-500">{label}</dt>

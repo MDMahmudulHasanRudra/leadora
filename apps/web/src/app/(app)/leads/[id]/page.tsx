@@ -1,6 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
 import { apiGet, getIdentity, requireData } from '@/lib/api-server';
-import type { Activity, Lead, Page, Pipeline, UserRow } from '@/lib/types';
+import type { Activity, CustomFieldDef, Lead, Page, Pipeline, UserRow } from '@/lib/types';
 import { LeadDetail } from './lead-detail';
 
 export const dynamic = 'force-dynamic';
@@ -15,16 +15,18 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
   if (status === 404 || !lead) notFound();
 
   const can = (p: string) => identity.permissions.includes(p);
-  const [activities, pipelines, users] = await Promise.all([
+  const [activities, pipelines, users, fields] = await Promise.all([
     requireData<Page<Activity>>(`/leads/${lead.id}/activities`),
     requireData<Page<Pipeline>>('/pipelines'),
     can('user.view') ? requireData<Page<UserRow>>('/users') : Promise.resolve({ items: [] as UserRow[] }),
+    requireData<Page<CustomFieldDef>>('/custom-fields?entity=lead'),
   ]);
 
   return (
     <LeadDetail
       lead={lead}
       activities={activities.items}
+      customFields={fields.items}
       stages={pipelines.items.find((p) => p.id === lead.pipelineId)?.stages ?? []}
       users={users.items.map(({ id, fullName, status }) => ({ id, fullName, active: status === 'ACTIVE' }))}
       timeZone={identity.user.timezone}

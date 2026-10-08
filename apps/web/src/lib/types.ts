@@ -56,7 +56,34 @@ export interface Pipeline {
 export type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 export const PRIORITIES: Priority[] = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
 
+export type CustomFieldType =
+  | 'text'
+  | 'long_text'
+  | 'number'
+  | 'decimal'
+  | 'boolean'
+  | 'date'
+  | 'datetime'
+  | 'select'
+  | 'multi_select'
+  | 'url'
+  | 'email'
+  | 'phone';
+
+export interface CustomFieldDef {
+  id: string;
+  key: string;
+  label: string;
+  type: CustomFieldType;
+  options: string[] | null;
+  required: boolean;
+  position: number;
+}
+
+export type CustomFieldValue = string | number | boolean | string[];
+
 export interface Lead {
+  customFields: Record<string, CustomFieldValue>;
   id: string;
   fullName: string;
   email: string | null;

@@ -30,6 +30,7 @@ const SECTIONS: { title?: string; items: NavItem[] }[] = [
       { label: 'Users', href: '/users', permission: 'user.view' },
       { label: 'Teams', href: '/teams', permission: 'team.view' },
       { label: 'Audit log', href: '/audit', permission: 'audit.view' },
+      { label: 'Custom fields', href: '/settings/fields', permission: 'settings.manage' },
     ],
   },
 ];
