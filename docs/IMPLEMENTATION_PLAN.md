@@ -117,6 +117,29 @@ Follow-ups noted, not done:
 - Uploaded CSV content is stored in Postgres (≤ 5 MB); move it to object storage when the storage provider lands, and purge it after the import finishes.
 - Import retries are safe, but the stale-job case (worker killed mid-row with no retry left) leaves status `PROCESSING`; a periodic sweeper should mark old ones `FAILED`.
 
+## Phase 2 — Communication
+
+### Decisions
+
+- **Model** (spec §21–23): `inboxes` (one per channel account) → `conversations` (thread with one lead) → `messages` (`INBOUND` / `OUTBOUND` / `INTERNAL`). Core code talks to a `ChannelProvider` interface only.
+- **Outbound** messages are persisted as `QUEUED` first, then sent by the worker (`messages` queue). Their status moves to `SENT` or `FAILED`, so the UI never waits on SMTP.
+- **Email** uses SMTP via nodemailer (MIT). Locally, mail goes to a Mailpit container (MIT) so sending can be verified. Inbound email arrives as a signed JSON webhook from whatever mail relay is used.
+- **Webhooks** (spec §53): verify the HMAC signature, then an idempotency check on (inbox, provider message id), then persist the raw event, then queue it. No heavy work happens inside the HTTP handler.
+- **Unknown inbound senders** become leads through `ingestLead` (source `EMAIL`, auto-assigned by rules). Replies thread by `In-Reply-To`/`References`, falling back to the lead's open conversation in that inbox.
+- **Channel secrets** (webhook signing secrets, later provider tokens) are encrypted at rest with AES-256-GCM, using a key from `DATA_ENCRYPTION_KEY`.
+- **Realtime** uses WebSockets authenticated by the session cookie. API and worker publish events on Valkey pub/sub, and each API instance fans them out to its sockets. State is always persisted first (spec §24).
+
+### Threat model additions
+
+| Threat | Abuse case | Mitigation | Test |
+| --- | --- | --- | --- |
+| Spoofing | Forged inbound webhook | HMAC-SHA256 over the raw body plus a timestamp (5 min window), compared in constant time | bad signature → 401 |
+| Tampering | Replayed webhook | timestamp window plus unique (inbox, message id) | same delivery twice → one message |
+| Info disclosure | Reading another org's conversation, or subscribing to its socket room | every query org-scoped; socket rooms derived from the session, never from client input | cross-org → 404 |
+| Injection | HTML email with scripts | stored as text; HTML is never rendered unsanitized (text view only for now) | — |
+| Elevation | Agent replies on conversations they can't see | `conversation.reply` required, conversation scoped to org | viewer → 403 |
+| DoS | Webhook flood | per-inbox rate limit; body ≤ 1 MB | — |
+
 ## Phase 1 / Sprint 4 — Pipeline, assignment, follow-ups
 
 Pipeline Kanban, assignment rules, follow-ups, tasks, notes, lead conversion to Contact + Company, dashboard metrics.

@@ -6,6 +6,9 @@ x-app-env: &app-env
   DATABASE_URL: postgres://${POSTGRES_USER:-leadora}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-leadora}
   VALKEY_URL: redis://valkey:6379
   JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+  DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:?set DATA_ENCRYPTION_KEY in .env}
+  SMTP_URL: ${SMTP_URL:-}
+  PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8080}
   APP_ORIGINS: ${APP_ORIGINS:-http://localhost:8080}
   ALLOW_SIGNUP: ${ALLOW_SIGNUP:-false}
   COOKIE_SECURE: ${COOKIE_SECURE:-true}

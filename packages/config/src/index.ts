@@ -15,6 +15,12 @@ export const envSchema = z.object({
   DATABASE_URL: z.string().url(),
   VALKEY_URL: z.string().url(),
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
+  // Encrypts channel and provider secrets at rest. Changing it makes stored secrets unreadable.
+  DATA_ENCRYPTION_KEY: z.string().min(32, 'DATA_ENCRYPTION_KEY must be at least 32 characters'),
+  // smtp://user:pass@host:port (or smtps://). Empty disables outbound email.
+  SMTP_URL: z.string().optional().default(''),
+  // Public base URL users open; used in links inside emails and webhook URLs.
+  PUBLIC_BASE_URL: z.string().url().default('http://localhost:8080'),
 
   // Comma-separated origins allowed to make state-changing requests (CSRF defense).
   APP_ORIGINS: z

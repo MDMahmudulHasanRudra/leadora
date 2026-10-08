@@ -13,3 +13,4 @@ export * from './followups';
 export * from './tasks';
 export * from './contacts';
 export * from './assignment-rules';
+export * from './conversations';

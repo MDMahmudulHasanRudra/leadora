@@ -12,6 +12,7 @@ import { TasksModule } from './tasks/tasks.module';
 import { ContactsModule } from './contacts/contacts.module';
 import { AssignmentModule } from './assignment/assignment.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { CommunicationModule } from './communication/communication.module';
 import { LeadsModule } from './leads/leads.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { TeamsModule } from './teams/teams.module';
@@ -35,6 +36,7 @@ import { UsersModule } from './users/users.module';
     ContactsModule,
     AssignmentModule,
     AnalyticsModule,
+    CommunicationModule,
   ],
 })
 export class AppModule {}

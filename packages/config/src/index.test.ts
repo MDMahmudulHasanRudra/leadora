@@ -13,6 +13,7 @@ const base = {
   DATABASE_URL: 'postgres://u:p@localhost:5432/db',
   VALKEY_URL: 'redis://localhost:6379',
   JWT_SECRET: 'x'.repeat(32),
+  DATA_ENCRYPTION_KEY: 'y'.repeat(32),
 };
 
 test('applies defaults and parses flags', () => {
