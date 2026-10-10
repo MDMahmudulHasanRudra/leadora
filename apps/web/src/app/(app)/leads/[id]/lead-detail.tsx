@@ -126,6 +126,12 @@ export function LeadDetail({ lead, activities, followups, tasks, customFields, s
         return p.mergedContact ? 'converted it, merging into an existing contact' : 'converted it to a contact';
       case 'note.added':
         return 'added a note';
+      case 'email.bounced':
+        return `had an email bounce${p.reason ? ` (${p.reason})` : ''}`;
+      case 'email.complained':
+        return 'marked one of our emails as spam';
+      case 'lead.form_submitted':
+        return `submitted the website form${p.formName ? ` “${p.formName}”` : ''}`;
       case 'ai.conversation_analyzed':
         return `ran an AI analysis of a conversation: AI score ${p.score}, ${String(p.sentiment ?? '').toLowerCase()} sentiment`;
       case 'ai.analysis_completed':

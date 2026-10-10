@@ -30,3 +30,4 @@ export * from './automation/engine';
 export * from './integrations/webhooks';
 export * from './communication/receive';
 export * from './integrations/meta';
+export * from './communication/email-status';

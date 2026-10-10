@@ -17,7 +17,7 @@ import {
 import { ApiTags } from '@nestjs/swagger';
 import type { Env } from '@leadora/config';
 import { type DbHandle, inboxes, webhookEvents } from '@leadora/database';
-import { decryptSecret, inboundEmailSchema } from '@leadora/domain';
+import { decryptSecret, emailStatusSchema, inboundEmailSchema } from '@leadora/domain';
 import type { Queue } from 'bullmq';
 import { and, eq } from 'drizzle-orm';
 import type { Request, Response } from 'express';
@@ -93,6 +93,43 @@ export class WebhooksController {
       return { received: true, duplicate: true, eventId: existing!.id };
     }
     await this.queue.add('inbound.process', { eventId: created.id }, { jobId: `inbound-${created.id}`, attempts: 4, backoff: { type: 'custom' } });
+    return { received: true, duplicate: false, eventId: created.id };
+  }
+
+  /** Spec §90: delivered / opened / bounced / complained, posted by the mail relay and signed like inbound email. */
+  @Public()
+  @Post('email-status/:inboxId')
+  @HttpCode(202)
+  async emailStatus(
+    @Param('inboxId', new ParseUUIDPipe({ errorHttpStatusCode: 404 })) inboxId: string,
+    @Req() req: Request & { rawBody?: Buffer },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const [inbox] = await this.handle.db.select().from(inboxes).where(and(eq(inboxes.id, inboxId), eq(inboxes.enabled, true), eq(inboxes.channel, 'EMAIL')));
+    if (!inbox) throw new NotFoundException({ code: 'INBOX_NOT_FOUND', message: 'Inbox not found' });
+    const secret = decryptSecret(inbox.webhookSecretEnc, this.env.DATA_ENCRYPTION_KEY);
+    if (!req.rawBody || !verifySignature(secret, req.rawBody, req.get('x-leadora-timestamp'), req.get('x-leadora-signature'))) {
+      throw new UnauthorizedException({ code: 'INVALID_SIGNATURE', message: 'Invalid or expired webhook signature' });
+    }
+    const parsed = emailStatusSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new UnprocessableEntityException({
+        code: 'VALIDATION_FAILED',
+        message: 'Validation failed',
+        details: parsed.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
+      });
+    }
+    const externalId = `status:${parsed.data.messageId}:${parsed.data.event}`;
+    const [created] = await this.handle.db
+      .insert(webhookEvents)
+      .values({ organizationId: inbox.organizationId, inboxId, provider: 'email-status', externalId, payload: parsed.data })
+      .onConflictDoNothing({ target: [webhookEvents.inboxId, webhookEvents.externalId] })
+      .returning({ id: webhookEvents.id });
+    if (!created) {
+      res.status(200);
+      return { received: true, duplicate: true };
+    }
+    await this.queue.add('email.status', { eventId: created.id }, { jobId: `email-status-${created.id}`, attempts: 4, backoff: { type: 'custom' } });
     return { received: true, duplicate: false, eventId: created.id };
   }
 }

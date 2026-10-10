@@ -17,6 +17,7 @@ import {
   MetaGraphProvider,
   markLeadImportFailed,
   processInboundEvent,
+  processEmailStatusEvent,
   processLeadImport,
   processMetaEvent,
   purgeProcessedEvents,
@@ -90,6 +91,10 @@ const handlers: Partial<Record<QueueName, Record<string, (job: Job) => Promise<u
     'scoring.rescore_org': async (job) => ({ changed: await rescoreOrganization(db, job.data.organizationId) }),
   },
   messages: {
+    'email.status': async (job) => {
+      const result = await processEmailStatusEvent(db, job.data.eventId);
+      if (result.status === 'PROCESSED') await publish(result.organizationId, 'message.updated', { conversationId: result.conversationId });
+    },
     'meta.process': async (job) => {
       const result = await processMetaEvent(db, job.data.eventId);
       if (result.status === 'PROCESSED') {

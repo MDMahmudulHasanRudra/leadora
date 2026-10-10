@@ -116,6 +116,10 @@ export function InboxesManager({ inboxes }: { inboxes: { id: string; name: strin
               <dd className="font-mono text-xs break-all">{created.webhookUrl}</dd>
             </div>
             <div>
+              <dt className="text-xs text-zinc-500">Delivery status webhook (delivered / opened / bounced / complained)</dt>
+              <dd className="font-mono text-xs break-all">{created.webhookUrl?.replace('/inbound/', '/email-status/')}</dd>
+            </div>
+            <div>
               <dt className="text-xs text-zinc-500">Signing secret</dt>
               <dd className="flex items-center gap-2">
                 <code className="font-mono text-xs break-all">{created.webhookSecret}</code>

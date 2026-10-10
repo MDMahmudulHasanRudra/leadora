@@ -13,7 +13,7 @@ Follows spec §103–§114 and the sprint backlog in §148. Each phase is done o
 | 4 | AI intelligence: scoring, conversation analysis, summaries, reply assistant, next action, NL search | Done |
 | 5 | Knowledge base / RAG with pgvector and citations | Done |
 | 6 | Automation engine | Done |
-| 7 | Integrations: WhatsApp, Facebook, Instagram, web chat, API keys | Not started |
+| 7 | Integrations: WhatsApp, Facebook, Instagram, web chat, API keys | Done |
 | 8 | Analytics & forecasting | Not started |
 | 9 | Production hardening | Not started |
 | 10 | SaaS | Not started |
@@ -119,7 +119,7 @@ Follow-ups noted, not done:
 
 ## Phase 7 — Integrations
 
-Slices: (1) API keys ✅ · (2) signed outbound webhooks ✅ · (3) public lead form · (4) website chat · (5) WhatsApp / Messenger / Instagram adapters · (6) email delivery tracking.
+Slices: (1) API keys ✅ · (2) signed outbound webhooks ✅ · (3) public lead form ✅ · (4) website chat ✅ · (5) WhatsApp / Messenger / Instagram adapters ✅ · (6) email delivery tracking ✅.
 
 ### Decisions
 
