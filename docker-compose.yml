@@ -134,8 +134,29 @@ services:
     restart: unless-stopped
     profiles: [clamav]
 
+  # Daily encrypted backups + automatic restore test (spec §63). Enable with COMPOSE_PROFILES=backup and
+  # BACKUP_PASSPHRASE set; copy the backups volume off the host. See docs/RUNBOOK.md.
+  backup:
+    build: { context: ./infrastructure/backup }
+    image: leadora/backup:local
+    restart: unless-stopped
+    profiles: [backup]
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-leadora}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      PGDATABASE: ${POSTGRES_DB:-leadora}
+      BACKUP_PASSPHRASE: ${BACKUP_PASSPHRASE:-}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-24}
+    volumes:
+      - backups:/backups
+      - uploads:/data/uploads:ro
+    depends_on:
+      postgres: { condition: service_healthy }
 volumes:
   pgdata:
+  backups:
   uploads:
   valkeydata:
   caddydata:
