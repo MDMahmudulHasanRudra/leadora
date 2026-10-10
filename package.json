@@ -13,7 +13,9 @@
     "test": "pnpm -r test",
     "db:generate": "pnpm --filter @leadora/database db:generate",
     "db:migrate": "pnpm --filter @leadora/database db:migrate",
-    "db:seed": "pnpm --filter @leadora/database db:seed"
+    "db:seed": "pnpm --filter @leadora/database db:seed",
+    "licenses": "node scripts/licenses.mjs",
+    "licenses:check": "node scripts/licenses.mjs --check"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

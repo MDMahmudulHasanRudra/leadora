@@ -14,3 +14,8 @@ allowBuilds:
   esbuild: true
   msgpackr-extract: false
   unrs-resolver: true
+
+overrides:
+  # exceljs pins unzipper ^0.10, which pulls in `buffers` (no license). 0.12 (MIT) drops it; exceljs only uses
+  # unzipper in its streaming reader, which we never call (we write XLSX). See THIRD_PARTY_NOTICES.md.
+  unzipper: 0.12.3
