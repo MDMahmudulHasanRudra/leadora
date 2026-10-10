@@ -38,6 +38,8 @@ export const envSchema = z.object({
   API_KEY_RATE_LIMIT_PER_MIN: z.coerce.number().int().min(1).max(100_000).default(600),
 
   OPENAI_API_KEY: z.string().optional().default(''),
+  // Meta Graph API base (WhatsApp Cloud API, Messenger, Instagram). Overridable for tests and API version pinning.
+  META_GRAPH_URL: z.string().url().default('https://graph.facebook.com/v21.0'),
 
   STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
   // local: a directory outside the app image (a Docker volume in Compose).

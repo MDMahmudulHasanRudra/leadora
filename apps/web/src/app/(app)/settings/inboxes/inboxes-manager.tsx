@@ -10,7 +10,15 @@ interface Created {
   webhookSecret?: string;
   webhookUrl?: string;
   embedCode?: string;
+  verifyToken?: string;
 }
+
+type Channel = 'EMAIL' | 'WEB_CHAT' | 'WHATSAPP' | 'FACEBOOK' | 'INSTAGRAM';
+const META: Record<string, { label: string; idLabel: string; idHint: string }> = {
+  WHATSAPP: { label: 'WhatsApp', idLabel: 'Phone number ID', idHint: 'WhatsApp Manager → API setup → Phone number ID' },
+  FACEBOOK: { label: 'Facebook Messenger', idLabel: 'Page ID', idHint: 'Your Facebook page → About → Page ID' },
+  INSTAGRAM: { label: 'Instagram', idLabel: 'Instagram account ID', idHint: 'The Instagram professional account linked to your page' },
+};
 
 const chatEmbed = (widgetKey: string) => `<script src="${typeof window === 'undefined' ? '' : window.location.origin}/chat-widget.js" data-widget-key="${widgetKey}" async></script>`;
 
@@ -32,7 +40,7 @@ function Copy({ text }: { text: string }) {
 
 export function InboxesManager({ inboxes }: { inboxes: { id: string; name: string; channel: string; address: string }[] }) {
   const router = useRouter();
-  const [channel, setChannel] = useState<'EMAIL' | 'WEB_CHAT'>('EMAIL');
+  const [channel, setChannel] = useState<Channel>('EMAIL');
   const [created, setCreated] = useState<Created | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -44,7 +52,9 @@ export function InboxesManager({ inboxes }: { inboxes: { id: string; name: strin
     const body =
       channel === 'EMAIL'
         ? { name: data.get('name'), channel, address: data.get('address') }
-        : {
+        : META[channel]
+          ? { name: data.get('name'), channel, config: { accountId: data.get('accountId'), appSecret: data.get('appSecret'), accessToken: data.get('accessToken') } }
+          : {
             name: data.get('name'),
             channel,
             config: {
@@ -72,6 +82,31 @@ export function InboxesManager({ inboxes }: { inboxes: { id: string; name: strin
   return (
     <div className="space-y-6">
       {error && <Alert>{error}</Alert>}
+      {created?.verifyToken && (
+        <Card className="space-y-3 border-amber-300 p-5 dark:border-amber-800">
+          <p className="font-medium">“{created.inbox.name}” is ready. In your Meta app, open Webhooks and enter these — the verify token won’t be shown again.</p>
+          <dl className="space-y-2 text-sm">
+            <div>
+              <dt className="text-xs text-zinc-500">Callback URL</dt>
+              <dd className="flex items-center gap-2">
+                <code className="font-mono text-xs break-all">{created.webhookUrl}</code>
+                <Copy text={created.webhookUrl ?? ''} />
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-zinc-500">Verify token</dt>
+              <dd className="flex items-center gap-2">
+                <code className="font-mono text-xs break-all">{created.verifyToken}</code>
+                <Copy text={created.verifyToken} />
+              </dd>
+            </div>
+          </dl>
+          <p className="text-xs text-zinc-500">Subscribe to the messages field (and message statuses for WhatsApp). WhatsApp only lets you reply freely within 24 hours of the customer’s last message.</p>
+          <Button variant="secondary" onClick={() => setCreated(null)}>
+            Done
+          </Button>
+        </Card>
+      )}
       {created?.webhookSecret && (
         <Card className="space-y-3 border-amber-300 p-5 dark:border-amber-800">
           <p className="font-medium">“{created.inbox.name}” is ready. Copy the webhook secret now — it won’t be shown again.</p>
@@ -106,7 +141,7 @@ export function InboxesManager({ inboxes }: { inboxes: { id: string; name: strin
               <li key={i.id} className="space-y-2 px-4 py-3 text-sm">
                 <div>
                   <p className="font-medium">{i.name}</p>
-                  <p className="text-xs text-zinc-500">{i.channel === 'WEB_CHAT' ? 'website chat' : `${i.channel.toLowerCase()} · ${i.address}`}</p>
+                  <p className="text-xs text-zinc-500">{i.channel === 'WEB_CHAT' ? 'website chat' : `${META[i.channel]?.label ?? i.channel.toLowerCase()} · ${i.address}`}</p>
                 </div>
                 {i.channel === 'WEB_CHAT' && (
                   <div>
@@ -126,15 +161,30 @@ export function InboxesManager({ inboxes }: { inboxes: { id: string; name: strin
         <h2 className="mb-4 font-medium">Add an inbox</h2>
         <form onSubmit={onCreate} className="grid gap-4 sm:grid-cols-2">
           <Field label="Channel" htmlFor="channel">
-            <Select id="channel" value={channel} onChange={(e) => setChannel(e.target.value as 'EMAIL' | 'WEB_CHAT')}>
+            <Select id="channel" value={channel} onChange={(e) => setChannel(e.target.value as Channel)}>
               <option value="EMAIL">Email</option>
               <option value="WEB_CHAT">Website chat</option>
+              <option value="WHATSAPP">WhatsApp</option>
+              <option value="FACEBOOK">Facebook Messenger</option>
+              <option value="INSTAGRAM">Instagram</option>
             </Select>
           </Field>
           <Field label="Name" htmlFor="name">
             <Input id="name" name="name" required maxLength={100} placeholder={channel === 'EMAIL' ? 'Sales email' : 'Website chat'} />
           </Field>
-          {channel === 'EMAIL' ? (
+          {META[channel] ? (
+            <>
+              <Field label={META[channel].idLabel} htmlFor="accountId" hint={META[channel].idHint}>
+                <Input id="accountId" name="accountId" required inputMode="numeric" pattern="\d{5,30}" />
+              </Field>
+              <Field label="App secret" htmlFor="appSecret" hint="Meta app → Settings → Basic. Verifies incoming webhooks; stored encrypted.">
+                <Input id="appSecret" name="appSecret" type="password" autoComplete="off" required />
+              </Field>
+              <Field label="Access token" htmlFor="accessToken" hint="A long-lived system-user or page token with messaging permission; stored encrypted.">
+                <Input id="accessToken" name="accessToken" type="password" autoComplete="off" required />
+              </Field>
+            </>
+          ) : channel === 'EMAIL' ? (
             <Field label="Email address" htmlFor="address" hint="Customers see this as the sender.">
               <Input id="address" name="address" type="email" required placeholder="sales@yourcompany.com" />
             </Field>
@@ -158,7 +208,6 @@ export function InboxesManager({ inboxes }: { inboxes: { id: string; name: strin
           </div>
         </form>
       </Card>
-      <p className="text-xs text-zinc-500">WhatsApp, Facebook and Instagram connect through Meta — see below once configured.</p>
     </div>
   );
 }

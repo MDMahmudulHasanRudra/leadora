@@ -39,6 +39,18 @@ export interface IngestContext {
 
 const invalid = (code: string, message: string) => new DomainError('invalid', code, message);
 
+const DEFAULT_SOURCE_NAMES: Record<IngestSourceType, string> = {
+  MANUAL: 'Manual entry',
+  CSV: 'CSV import',
+  WEBSITE: 'Website form',
+  API: 'API',
+  EMAIL: 'Email',
+  WEBHOOK: 'Webhook',
+  WHATSAPP: 'WhatsApp',
+  FACEBOOK: 'Facebook Messenger',
+  INSTAGRAM: 'Instagram',
+};
+
 /**
  * The single path every lead takes into the system (spec §12):
  * normalize → validate → deduplicate → insert → activity. Callers own the transaction.
@@ -189,8 +201,13 @@ export async function resolveSource(tx: Transaction, organizationId: string, sou
     ? and(eq(leadSources.id, sourceId), eq(leadSources.organizationId, organizationId))
     : and(eq(leadSources.organizationId, organizationId), eq(leadSources.type, type));
   const [source] = await tx.select({ id: leadSources.id, type: leadSources.type }).from(leadSources).where(where).limit(1);
-  if (!source) throw invalid('INVALID_SOURCE', 'Lead source not found');
-  return source;
+  if (source) return source;
+  if (sourceId) throw invalid('INVALID_SOURCE', 'Lead source not found');
+  // Channel sources appear the first time a lead arrives that way (e.g. a newly connected WhatsApp number).
+  await tx.insert(leadSources).values({ organizationId, type, name: DEFAULT_SOURCE_NAMES[type] }).onConflictDoNothing();
+  const [created] = await tx.select({ id: leadSources.id, type: leadSources.type }).from(leadSources).where(where).limit(1);
+  if (!created) throw invalid('INVALID_SOURCE', 'Lead source not found');
+  return created;
 }
 
 export async function resolveOwner(tx: Transaction, organizationId: string, ownerUserId: string | null) {

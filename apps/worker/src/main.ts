@@ -14,9 +14,11 @@ import {
   emitOverdueFollowupEvents,
   executeRun,
   indexDocument,
+  MetaGraphProvider,
   markLeadImportFailed,
   processInboundEvent,
   processLeadImport,
+  processMetaEvent,
   purgeProcessedEvents,
   REALTIME_CHANNEL,
   organizationsNeedingRescore,
@@ -41,7 +43,8 @@ const { db, pool } = createDb(env.DATABASE_URL);
 const connection = { url: env.VALKEY_URL, maxRetriesPerRequest: null };
 const publisher = new Redis(env.VALKEY_URL, { maxRetriesPerRequest: 2 });
 const email = env.SMTP_URL ? new SmtpEmailProvider(env.SMTP_URL) : null;
-const providers: ChannelProviders = { WEB_CHAT: webChatProvider, ...(email ? { EMAIL: email } : {}) };
+const meta = new MetaGraphProvider({ encryptionKey: env.DATA_ENCRYPTION_KEY, graphUrl: env.META_GRAPH_URL });
+const providers: ChannelProviders = { WEB_CHAT: webChatProvider, WHATSAPP: meta, FACEBOOK: meta, INSTAGRAM: meta, ...(email ? { EMAIL: email } : {}) };
 const storage = createStorage(env);
 // Same provider wiring as the API's AI module; the org's own key comes from ai_settings per call.
 const aiDeps = {
@@ -87,6 +90,12 @@ const handlers: Partial<Record<QueueName, Record<string, (job: Job) => Promise<u
     'scoring.rescore_org': async (job) => ({ changed: await rescoreOrganization(db, job.data.organizationId) }),
   },
   messages: {
+    'meta.process': async (job) => {
+      const result = await processMetaEvent(db, job.data.eventId);
+      if (result.status === 'PROCESSED') {
+        for (const conversationId of result.conversations) await publish(result.organizationId!, 'conversation.updated', { conversationId });
+      }
+    },
     'message.send': (job) =>
       handleMessageSend({ deliver: (id, finalAttempt) => deliverMessage(db, id, providers, { finalAttempt }), publish }, job),
     'inbound.process': async (job) => {

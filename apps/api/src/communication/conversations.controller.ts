@@ -32,6 +32,19 @@ const inboxSchema = z.discriminatedUnion('channel', [
       })
       .default({ allowedOrigins: [], title: 'Chat with us', greeting: 'Hi! How can we help?' }),
   }),
+  // Meta channels: the WhatsApp phone-number id / Facebook page id / Instagram account id, plus the app secret
+  // (verifies webhooks) and an access token (sends). Both are sealed at rest and never returned.
+  ...(['WHATSAPP', 'FACEBOOK', 'INSTAGRAM'] as const).map((channel) =>
+    z.object({
+      name: z.string().trim().min(1).max(100),
+      channel: z.literal(channel),
+      config: z.object({
+        accountId: z.string().trim().regex(/^\d{5,30}$/, 'Use the numeric id from Meta'),
+        appSecret: z.string().trim().min(16).max(200),
+        accessToken: z.string().trim().min(20).max(1000),
+      }),
+    }),
+  ),
 ]);
 type InboxBody = z.infer<typeof inboxSchema>;
 type StartBody = z.infer<typeof startSchema>;
@@ -66,6 +79,9 @@ export class ConversationsController {
   async createInbox(@CurrentAuth() auth: AuthContext, @Body(new ZodPipe(inboxSchema)) body: InboxBody) {
     const webhookSecret = `whsec_${randomBytes(32).toString('base64url')}`;
     const widgetKey = body.channel === 'WEB_CHAT' ? `wc_${randomBytes(18).toString('base64url')}` : null;
+    const verifyToken = randomBytes(24).toString('base64url');
+    const seal = (v: string) => encryptSecret(v, this.env.DATA_ENCRYPTION_KEY);
+    const meta = body.channel === 'WHATSAPP' || body.channel === 'FACEBOOK' || body.channel === 'INSTAGRAM' ? body.config : null;
     try {
       const [inbox] = await this.handle.db
         .insert(inboxes)
@@ -73,12 +89,21 @@ export class ConversationsController {
           organizationId: auth.organizationId,
           name: body.name,
           channel: body.channel,
-          address: body.channel === 'EMAIL' ? body.address : widgetKey!,
-          config: body.channel === 'WEB_CHAT' ? body.config : {},
+          address: body.channel === 'EMAIL' ? body.address : meta ? meta.accountId : widgetKey!,
+          config:
+            body.channel === 'WEB_CHAT'
+              ? body.config
+              : meta
+                ? { accountId: meta.accountId, appSecretEnc: seal(meta.appSecret), accessTokenEnc: seal(meta.accessToken), verifyTokenEnc: seal(verifyToken) }
+                : {},
           webhookSecretEnc: encryptSecret(webhookSecret, this.env.DATA_ENCRYPTION_KEY),
         })
         .returning({ id: inboxes.id, name: inboxes.name, channel: inboxes.channel, address: inboxes.address, enabled: inboxes.enabled });
       const base = this.env.PUBLIC_BASE_URL.replace(/\/$/, '');
+      if (meta) {
+        // Paste both into the Meta app's webhook settings; the verify token is shown only now.
+        return { inbox, webhookUrl: `${base}/api/v1/webhooks/meta/${inbox!.id}`, verifyToken };
+      }
       if (widgetKey) {
         return { inbox, widgetKey, embedCode: `<script src="${base}/chat-widget.js" data-widget-key="${widgetKey}" async></script>` };
       }

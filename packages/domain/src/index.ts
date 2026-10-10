@@ -29,3 +29,4 @@ export * from './automation/actions';
 export * from './automation/engine';
 export * from './integrations/webhooks';
 export * from './communication/receive';
+export * from './integrations/meta';
