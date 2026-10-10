@@ -20,6 +20,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags } from '@nestjs/swagger';
+import { RateLimit } from '../common/rate-limit.guard';
 import type { Env } from '@leadora/config';
 import type { Response } from 'express';
 import type { z } from 'zod';
@@ -163,6 +164,7 @@ export class KnowledgeController {
   }
 
   @Post('search')
+  @RateLimit('ai')
   @HttpCode(200)
   @RequirePermission('knowledge.view', 'ai.use')
   search(@CurrentAuth() auth: AuthContext, @Body(new ZodPipe(searchSchema)) body: z.infer<typeof searchSchema>) {
@@ -170,6 +172,7 @@ export class KnowledgeController {
   }
 
   @Post('ask')
+  @RateLimit('ai')
   @HttpCode(200)
   @RequirePermission('knowledge.view', 'ai.use')
   ask(@CurrentAuth() auth: AuthContext, @Body(new ZodPipe(askSchema)) body: z.infer<typeof askSchema>) {

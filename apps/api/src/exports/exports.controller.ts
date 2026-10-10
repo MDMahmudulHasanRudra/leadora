@@ -1,5 +1,6 @@
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Res } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { RateLimit } from '../common/rate-limit.guard';
 import type { Response } from 'express';
 import { type AuthContext, CurrentAuth, RequirePermission } from '../auth/auth-context';
 import { ReqMeta, type RequestMeta } from '../common/request-meta';
@@ -21,6 +22,7 @@ export class ExportsController {
 
   @Post()
   @HttpCode(202)
+  @RateLimit('export')
   @RequirePermission('lead.export')
   request(@CurrentAuth() auth: AuthContext, @Body(new ZodPipe(exportRequestSchema)) body: ExportRequest, @ReqMeta() meta: RequestMeta) {
     return this.exports.request(auth, body, meta);

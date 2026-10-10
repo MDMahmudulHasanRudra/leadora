@@ -36,6 +36,9 @@ export const envSchema = z.object({
   SESSION_TTL_HOURS: z.coerce.number().int().positive().max(24 * 90).default(24 * 7),
   // Requests per minute per API key (spec §92).
   API_KEY_RATE_LIMIT_PER_MIN: z.coerce.number().int().min(1).max(100_000).default(600),
+  // Spec §69: per signed-in user (or API key) per minute; AI is stricter.
+  RATE_LIMIT_API_PER_MIN: z.coerce.number().int().min(1).max(100_000).default(1200),
+  RATE_LIMIT_AI_PER_MIN: z.coerce.number().int().min(1).max(10_000).default(30),
 
   OPENAI_API_KEY: z.string().optional().default(''),
   // Meta Graph API base (WhatsApp Cloud API, Messenger, Instagram). Overridable for tests and API version pinning.
@@ -52,6 +55,9 @@ export const envSchema = z.object({
   STORAGE_SECRET_KEY: z.string().optional().default(''),
   STORAGE_FORCE_PATH_STYLE: flag,
   KB_MAX_FILE_MB: z.coerce.number().int().min(1).max(200).default(20),
+  // Optional clamd for upload malware scanning (spec §54). Empty = scanning off.
+  CLAMAV_HOST: z.string().optional().default(''),
+  CLAMAV_PORT: z.coerce.number().int().min(1).max(65535).default(3310),
 
   ENABLE_AI: flag,
   ENABLE_KNOWLEDGE_BASE: flag,

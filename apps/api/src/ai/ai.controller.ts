@@ -1,5 +1,6 @@
 import { Body, Controller, Get, HttpCode, Param, ParseIntPipe, ParseUUIDPipe, Post, Put } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { RateLimit } from '../common/rate-limit.guard';
 import { type AuthContext, CurrentAuth, RequirePermission } from '../auth/auth-context';
 import { ZodPipe } from '../common/zod.pipe';
 import { type PromptVersionInput, promptVersionSchema, type UpdateSettingsInput, updateSettingsSchema } from './ai.schemas';
@@ -25,6 +26,7 @@ export class AiController {
   }
 
   @Post('settings/test')
+  @RateLimit('ai')
   @HttpCode(200)
   @RequirePermission('ai.configure')
   test(@CurrentAuth() auth: AuthContext) {
@@ -32,6 +34,7 @@ export class AiController {
   }
 
   @Post('leads/:id/analyze')
+  @RateLimit('ai')
   @HttpCode(200)
   @RequirePermission('ai.use', 'lead.view')
   analyze(@CurrentAuth() auth: AuthContext, @Param('id', Id) id: string) {

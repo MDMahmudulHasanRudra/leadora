@@ -8,6 +8,7 @@ import {
   documentStorageKey,
   type KnowledgeViewer,
   retrievalSettings,
+  scanWithClamd,
   sha256,
 } from '@leadora/domain';
 import type { StorageProvider } from '@leadora/storage';
@@ -286,6 +287,7 @@ export class KnowledgeService {
     // Multer gives latin1-decoded names; re-decode so Bangla and other UTF-8 file names survive.
     const fileName = Buffer.from(file.originalname, 'latin1').toString('utf8');
     const { mimeType } = detectFileType(file.buffer, fileName, file.mimetype, this.env.KB_MAX_FILE_MB * MB);
+    if (this.env.CLAMAV_HOST) await scanWithClamd(file.buffer, { host: this.env.CLAMAV_HOST, port: this.env.CLAMAV_PORT });
     return this.createDocument(auth, meta, {
       collectionId: fields.collectionId,
       title: fields.title ?? fileName.replace(/\.[^.]+$/, '').slice(0, 200),

@@ -1,3 +1,4 @@
+import net from 'node:net';
 import { FakeAiProvider } from '@leadora/ai';
 import { indexDocument, processInboundEvent } from '@leadora/domain';
 import type { StorageProvider } from '@leadora/storage';
@@ -89,6 +90,35 @@ describe('knowledge base: sources, indexing, retrieval and cited answers (spec Â
     expect(chunks.items.map((c: { section: string }) => c.section)).toEqual(['Pricing', 'Warranty']);
     const { rows } = await t.db.execute<{ purpose: string }>(sql`select purpose from ai_runs`);
     expect(rows).toEqual([{ purpose: 'kb_index' }]);
+  });
+
+  it('scans uploads with clamd when configured, rejecting infected files and failing closed', async () => {
+    // A minimal clamd: reads INSTREAM chunks and flags the EICAR test string.
+    const server = net.createServer((socket) => {
+      let data = Buffer.alloc(0);
+      socket.on('data', (d) => {
+        data = Buffer.concat([data, d]);
+        if (data.subarray(-4).equals(Buffer.alloc(4))) {
+          socket.end(data.includes('EICAR-STANDARD-ANTIVIRUS-TEST-FILE') ? 'stream: Win.Test.EICAR_HDB-1 FOUND\0' : 'stream: OK\0');
+        }
+      });
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    const env = t.app.get<{ CLAMAV_HOST: string; CLAMAV_PORT: number }>(ENV);
+    env.CLAMAV_HOST = '127.0.0.1';
+    env.CLAMAV_PORT = (server.address() as net.AddressInfo).port;
+    try {
+      await upload(admin, 'clean.txt', 'Price list: blue model 120 BDT', 'text/plain').expect(201);
+      const eicar = 'X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*';
+      expect((await upload(admin, 'eicar.txt', eicar, 'text/plain').expect(422)).body.error.code).toBe('MALWARE_DETECTED');
+      server.close();
+      await new Promise((r) => setTimeout(r, 50));
+      expect((await upload(admin, 'later.txt', 'Another clean document here', 'text/plain').expect(502)).body.error.code).toBe('SCAN_UNAVAILABLE');
+      expect((await admin.get(`/api/v1/kb/documents?collectionId=${collectionId}`).expect(200)).body.items).toHaveLength(1);
+    } finally {
+      env.CLAMAV_HOST = '';
+      server.close();
+    }
   });
 
   it('rejects files whose type, signature or size is wrong', async () => {

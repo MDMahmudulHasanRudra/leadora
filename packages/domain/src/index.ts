@@ -34,3 +34,4 @@ export * from './communication/email-status';
 export * from './leads/filters';
 export * from './exports/lead-export';
 export * from './analytics/insights';
+export * from './knowledge/malware-scan';

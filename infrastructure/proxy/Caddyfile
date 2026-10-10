@@ -7,11 +7,18 @@
 {$SITE_ADDRESS} {
 	encode zstd gzip
 
+	# Spec §54. '?' sets a header only when the app hasn't (e.g. sandboxed file downloads keep their own CSP).
 	header {
 		X-Content-Type-Options nosniff
 		X-Frame-Options DENY
 		Referrer-Policy strict-origin-when-cross-origin
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+		Cross-Origin-Opener-Policy same-origin
+		# Ignored by browsers over plain HTTP; enforced once SITE_ADDRESS is a real domain with TLS.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		?Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
 		-Server
+		-X-Powered-By
 	}
 
 	handle /api/* {

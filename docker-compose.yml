@@ -23,6 +23,11 @@ x-app-env: &app-env
   STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY:-}
   STORAGE_FORCE_PATH_STYLE: ${STORAGE_FORCE_PATH_STYLE:-false}
   KB_MAX_FILE_MB: ${KB_MAX_FILE_MB:-20}
+  CLAMAV_HOST: ${CLAMAV_HOST:-}
+  CLAMAV_PORT: ${CLAMAV_PORT:-3310}
+  RATE_LIMIT_API_PER_MIN: ${RATE_LIMIT_API_PER_MIN:-1200}
+  RATE_LIMIT_AI_PER_MIN: ${RATE_LIMIT_AI_PER_MIN:-30}
+  META_GRAPH_URL: ${META_GRAPH_URL:-https://graph.facebook.com/v21.0}
   ENABLE_AI: ${ENABLE_AI:-false}
   ENABLE_KNOWLEDGE_BASE: ${ENABLE_KNOWLEDGE_BASE:-false}
   ENABLE_AUTOMATION: ${ENABLE_AUTOMATION:-false}
@@ -120,6 +125,13 @@ services:
     depends_on:
       web: { condition: service_healthy }
       api: { condition: service_healthy }
+
+  # Optional upload malware scanning (spec §54): docker compose --profile clamav up -d, then CLAMAV_HOST=clamav.
+  # A separate service (GPL-2.0), never linked into the app.
+  clamav:
+    image: clamav/clamav:stable
+    restart: unless-stopped
+    profiles: [clamav]
 
 volumes:
   pgdata:
