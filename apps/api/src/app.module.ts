@@ -22,6 +22,7 @@ import { AutomationsModule } from './automations/automations.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { LeadFormsModule } from './lead-forms/lead-forms.module';
 import { ExportsModule } from './exports/exports.module';
+import { MetricsModule } from './metrics/metrics.module';
 import { LeadsModule } from './leads/leads.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { TeamsModule } from './teams/teams.module';
@@ -55,6 +56,7 @@ import { UsersModule } from './users/users.module';
     WebhooksModule,
     LeadFormsModule,
     ExportsModule,
+    MetricsModule,
   ],
 })
 export class AppModule {}

@@ -4,6 +4,7 @@ import { WsAdapter } from '@nestjs/platform-ws';
 import cookieParser from 'cookie-parser';
 import type { NextFunction, Request, Response } from 'express';
 import { HttpExceptionFilter } from './common/http-exception.filter';
+import { httpMetricsMiddleware } from './metrics/http-metrics';
 
 export function configureApp(app: NestExpressApplication): void {
   // Spec §91: embeds on customer websites call /api/v1/public/* cross-origin. Allow it without credentials
@@ -23,6 +24,7 @@ export function configureApp(app: NestExpressApplication): void {
     }
     next();
   });
+  app.use(httpMetricsMiddleware);
   app.use(cookieParser());
   app.useWebSocketAdapter(new WsAdapter(app));
   // Inbound emails can exceed the 100 kB default.
@@ -32,6 +34,7 @@ export function configureApp(app: NestExpressApplication): void {
     exclude: [
       { path: 'health', method: RequestMethod.GET },
       { path: 'health/{*path}', method: RequestMethod.GET },
+      { path: 'metrics', method: RequestMethod.GET },
     ],
   });
   const express = app.getHttpAdapter().getInstance();

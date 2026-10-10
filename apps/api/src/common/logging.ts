@@ -18,13 +18,17 @@ export function loggerParams(level: string): Params {
     pinoHttp: {
       ...baseLoggerOptions('api', level),
       genReqId: resolveRequestId,
-      customProps: (req) => ({ requestId: (req as IncomingMessage & { id?: unknown }).id }),
+      // Spec §70: every request log names the tenant and user (set by the auth guard before the response is logged).
+      customProps: (req) => {
+        const r = req as IncomingMessage & { id?: unknown; auth?: { organizationId: string; userId: string; apiKeyId?: string } };
+        return { requestId: r.id, organizationId: r.auth?.organizationId, userId: r.auth?.userId, apiKeyId: r.auth?.apiKeyId };
+      },
       // Headers are deliberately not logged: they can carry tokens and PII.
       serializers: {
         req: (req: { method: string; url: string }) => ({ method: req.method, url: req.url }),
         res: (res: { statusCode: number }) => ({ statusCode: res.statusCode }),
       },
-      autoLogging: { ignore: (req) => (req.url ?? '').startsWith('/health') },
+      autoLogging: { ignore: (req) => (req.url ?? '').startsWith('/health') || (req.url ?? '').startsWith('/metrics') },
     },
   };
 }

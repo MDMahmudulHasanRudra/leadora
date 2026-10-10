@@ -57,6 +57,8 @@ export const envSchema = z.object({
   KB_MAX_FILE_MB: z.coerce.number().int().min(1).max(200).default(20),
   // Optional clamd for upload malware scanning (spec §54). Empty = scanning off.
   CLAMAV_HOST: z.string().optional().default(''),
+  // Optional bearer token for the internal /metrics endpoints (spec §70).
+  METRICS_TOKEN: z.string().optional().default(''),
   CLAMAV_PORT: z.coerce.number().int().min(1).max(65535).default(3310),
 
   ENABLE_AI: flag,
@@ -90,3 +92,5 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
   }
   return parsed.data;
 }
+
+export { Counter, Gauge, Histogram, MetricsRegistry } from './metrics';

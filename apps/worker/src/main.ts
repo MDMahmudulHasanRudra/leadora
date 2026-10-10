@@ -1,7 +1,7 @@
 import http from 'node:http';
 import { Queue, Worker, type Job } from 'bullmq';
 import pino from 'pino';
-import { baseLoggerOptions, loadEnv } from '@leadora/config';
+import { baseLoggerOptions, loadEnv, MetricsRegistry } from '@leadora/config';
 import { OpenAiProvider } from '@leadora/ai';
 import { createDb } from '@leadora/database';
 import {
@@ -153,6 +153,16 @@ const handlers: Partial<Record<QueueName, Record<string, (job: Job) => Promise<u
   },
 };
 
+// Spec §70: job throughput, failures and duration, scraped from the health port.
+const metrics = new MetricsRegistry({ service: 'worker' });
+const jobsTotal = metrics.counter('worker_jobs_total', 'Finished jobs by queue, job and outcome');
+const jobDuration = metrics.histogram('worker_job_duration_seconds', 'Job run time', [0.05, 0.25, 1, 5, 15, 60, 300]);
+const recordJob = (queue: string, job: Job | undefined, outcome: 'completed' | 'failed') => {
+  if (!job) return;
+  jobsTotal.inc({ queue, job: job.name, outcome });
+  if (job.processedOn && job.finishedOn) jobDuration.observe({ queue, job: job.name }, (job.finishedOn - job.processedOn) / 1000);
+};
+
 const workers = (Object.keys(QUEUES) as QueueName[]).map((name) => {
   const worker = new Worker(
     name,
@@ -168,11 +178,13 @@ const workers = (Object.keys(QUEUES) as QueueName[]).map((name) => {
     },
   );
   worker.on('completed', (job) => {
+    recordJob(name, job, 'completed');
     if (!QUIET_JOBS.has(job.name)) log.info({ queue: name, jobId: job.id, job: job.name }, 'job.completed');
   });
-  worker.on('failed', (job, err) =>
-    log.error({ queue: name, jobId: job?.id, job: job?.name, attempts: job?.attemptsMade, err: err.message }, 'job.failed'),
-  );
+  worker.on('failed', (job, err) => {
+    recordJob(name, job, 'failed');
+    log.error({ queue: name, jobId: job?.id, job: job?.name, attempts: job?.attemptsMade, err: err.message }, 'job.failed');
+  });
   worker.on('error', (err) => log.error({ queue: name, err: err.message }, 'worker.error'));
   return worker;
 });
@@ -199,6 +211,14 @@ void organizationsNeedingRescore(db)
 
 const healthPort = Number(process.env.WORKER_HEALTH_PORT ?? 3002);
 const server = http.createServer((req, res) => {
+  if (req.url === '/metrics') {
+    if (env.METRICS_TOKEN && req.headers.authorization !== `Bearer ${env.METRICS_TOKEN}`) {
+      res.writeHead(401).end();
+      return;
+    }
+    res.writeHead(200, { 'content-type': metrics.contentType }).end(metrics.render());
+    return;
+  }
   if (req.url === '/health/live') {
     res.writeHead(200, { 'content-type': 'application/json' }).end('{"status":"ok"}');
     return;
