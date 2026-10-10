@@ -10,7 +10,7 @@ coverage/
 *.log
 .DS_Store
 .turbo/
-storage/
+/storage/
 
 # Local file storage (STORAGE_DRIVER=local outside Docker)
 /data/
