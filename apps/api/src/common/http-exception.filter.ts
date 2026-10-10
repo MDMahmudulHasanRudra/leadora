@@ -1,4 +1,5 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { reportError } from '@leadora/config';
 import { DomainError, type DomainErrorKind } from '@leadora/domain';
 import type { Request, Response } from 'express';
 
@@ -62,6 +63,13 @@ export class HttpExceptionFilter implements ExceptionFilter {
       }
     } else {
       this.logger.error({ err: exception, requestId }, 'Unhandled exception');
+      // Only unexpected errors are tracked; HTTP and domain errors are part of the API contract.
+      const auth = (req as Request & { auth?: { organizationId?: string; userId?: string } }).auth;
+      reportError(exception, {
+        tags: { requestId, organizationId: auth?.organizationId, route: (req.route as { path?: string } | undefined)?.path },
+        user: { id: auth?.userId },
+        request: { method: req.method, url: req.originalUrl },
+      });
     }
 
     const payload: ApiErrorBody = { error: { code, message, requestId } };

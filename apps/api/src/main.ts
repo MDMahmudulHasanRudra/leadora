@@ -3,7 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
-import type { Env } from '@leadora/config';
+import { type Env, reportError } from '@leadora/config';
 import { AppModule } from './app.module';
 import { configureApp } from './app.setup';
 import { ENV } from './infra/tokens';
@@ -27,5 +27,8 @@ async function bootstrap() {
 
   await app.listen(env.PORT, '0.0.0.0');
 }
+
+// Errors outside a request (timers, event handlers) still reach error tracking.
+process.on('unhandledRejection', (reason) => reportError(reason, { tags: { kind: 'unhandledRejection' } }));
 
 void bootstrap();

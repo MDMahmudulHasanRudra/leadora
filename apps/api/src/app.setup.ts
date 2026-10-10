@@ -3,10 +3,16 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { WsAdapter } from '@nestjs/platform-ws';
 import cookieParser from 'cookie-parser';
 import type { NextFunction, Request, Response } from 'express';
+import { configureErrorReporting, type Env } from '@leadora/config';
 import { HttpExceptionFilter } from './common/http-exception.filter';
+import { ENV } from './infra/tokens';
 import { httpMetricsMiddleware } from './metrics/http-metrics';
 
 export function configureApp(app: NestExpressApplication): void {
+  const env = app.get<Env>(ENV);
+  configureErrorReporting(
+    env.ERROR_TRACKING_DSN ? { dsn: env.ERROR_TRACKING_DSN, service: 'api', environment: env.NODE_ENV, release: env.APP_RELEASE || undefined } : null,
+  );
   // Spec §91: embeds on customer websites call /api/v1/public/* cross-origin. Allow it without credentials
   // (no cookies cross); each handler enforces its own origin allow-list.
   app.use('/api/v1/public', (req: Request, res: Response, next: NextFunction) => {

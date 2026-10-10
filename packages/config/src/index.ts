@@ -59,6 +59,10 @@ export const envSchema = z.object({
   CLAMAV_HOST: z.string().optional().default(''),
   // Optional bearer token for the internal /metrics endpoints (spec §70).
   METRICS_TOKEN: z.string().optional().default(''),
+  // Optional error tracking (Sentry or self-hosted GlitchTip DSN). Empty = off.
+  ERROR_TRACKING_DSN: z.string().optional().default(''),
+  // Release name attached to error reports (e.g. the git commit).
+  APP_RELEASE: z.string().optional().default(''),
   CLAMAV_PORT: z.coerce.number().int().min(1).max(65535).default(3310),
 
   ENABLE_AI: flag,
@@ -94,3 +98,4 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
 }
 
 export { Counter, Gauge, Histogram, MetricsRegistry } from './metrics';
+export { configureErrorReporting, type ErrorContext, ErrorReporter, flushErrorReports, parseDsn, reportError, type SentryEvent } from './error-reporter';

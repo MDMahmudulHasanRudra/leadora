@@ -1,7 +1,7 @@
 import http from 'node:http';
 import { Queue, Worker, type Job } from 'bullmq';
 import pino from 'pino';
-import { baseLoggerOptions, loadEnv, MetricsRegistry } from '@leadora/config';
+import { baseLoggerOptions, configureErrorReporting, loadEnv, MetricsRegistry, reportError } from '@leadora/config';
 import { OpenAiProvider } from '@leadora/ai';
 import { createDb } from '@leadora/database';
 import {
@@ -42,6 +42,10 @@ import { QUEUES, retryDelay, type QueueName } from './queues';
 
 const env = loadEnv();
 const log = pino(baseLoggerOptions('worker', env.LOG_LEVEL));
+configureErrorReporting(
+  env.ERROR_TRACKING_DSN ? { dsn: env.ERROR_TRACKING_DSN, service: 'worker', environment: env.NODE_ENV, release: env.APP_RELEASE || undefined } : null,
+);
+process.on('unhandledRejection', (reason) => reportError(reason, { tags: { kind: 'unhandledRejection' } }));
 const { db, pool } = createDb(env.DATABASE_URL);
 
 const connection = { url: env.VALKEY_URL, maxRetriesPerRequest: null };
@@ -184,8 +188,15 @@ const workers = (Object.keys(QUEUES) as QueueName[]).map((name) => {
   worker.on('failed', (job, err) => {
     recordJob(name, job, 'failed');
     log.error({ queue: name, jobId: job?.id, job: job?.name, attempts: job?.attemptsMade, err: err.message }, 'job.failed');
+    // Track a job once it has used up its retries; earlier attempts are expected noise.
+    if (!job || job.attemptsMade >= (job.opts.attempts ?? 1)) {
+      reportError(err, { tags: { queue: name, job: job?.name, jobId: job?.id, organizationId: job?.data?.organizationId } });
+    }
   });
-  worker.on('error', (err) => log.error({ queue: name, err: err.message }, 'worker.error'));
+  worker.on('error', (err) => {
+    log.error({ queue: name, err: err.message }, 'worker.error');
+    reportError(err, { tags: { queue: name, kind: 'worker.error' } });
+  });
   return worker;
 });
 

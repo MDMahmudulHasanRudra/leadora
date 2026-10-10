@@ -33,6 +33,10 @@ there. Losing Valkey loses only queued jobs in flight and rate-limit windows (se
   `organizationId`, `userId` and `apiKeyId`. Backup events: `backup.completed`, `restore_test.verified`,
   `backup.cycle_failed`.
 
+- Error tracking: set `ERROR_TRACKING_DSN` (Sentry, or self-hosted GlitchTip) and `APP_RELEASE`. The api reports
+  unexpected errors (not 4xx or domain errors), and the worker reports jobs that failed their last attempt and
+  unhandled rejections. Reports carry ids and the request path only, capped at 30 per minute per process.
+
 Alert on: `/health/ready` failing, 5xx rate, p95 latency above the §68 targets, growing `leadora_queue_jobs`
 (waiting or failed), and **no `restore_test.verified` in 26 hours**.
 
