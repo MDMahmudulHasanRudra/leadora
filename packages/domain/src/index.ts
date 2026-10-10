@@ -1,5 +1,6 @@
 export * from './errors';
 export * from './secrets';
+export * from './secrets-rotation';
 export * from './notifications';
 export * from './ai/prompts';
 export * from './ai/gateway';

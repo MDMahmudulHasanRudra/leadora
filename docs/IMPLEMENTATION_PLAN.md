@@ -15,7 +15,7 @@ Follows spec §103–§114 and the sprint backlog in §148. Each phase is done o
 | 6 | Automation engine | Done |
 | 7 | Integrations: WhatsApp, Facebook, Instagram, web chat, API keys | Done |
 | 8 | Analytics & forecasting | Done |
-| 9 | Production hardening | Not started |
+| 9 | Production hardening | Done |
 | 10 | SaaS | Not started |
 
 ## Phase 0 checklist
@@ -116,6 +116,25 @@ Follow-ups noted, not done:
 Follow-ups noted, not done:
 - Uploaded CSV content is stored in Postgres (≤ 5 MB); move it to object storage when the storage provider lands, and purge it after the import finishes.
 - Import retries are safe, but the stale-job case (worker killed mid-row with no retry left) leaves status `PROCESSING`; a periodic sweeper should mark old ones `FAILED`.
+
+## Phase 9 — Production hardening
+
+Slices: (1) per-category rate limits, security headers, upload malware-scan hook ✅ · (2) Prometheus metrics; tenant and user on request logs ✅ · (3) encrypted backups with automatic restore test ✅ · (4) load test against §68 ✅ · (5) DR runbook and `DATA_ENCRYPTION_KEY` rotation ✅.
+
+### Decisions
+
+- **Rate limits** (spec §69): authenticated traffic is limited per user or per API key in Valkey fixed windows, with a stricter `ai` category, plus `export` and `bulk`. Auth, public ingestion and webhooks keep their own limiters next to the code they protect.
+- **Metrics:** a small dependency-free registry that emits the Prometheus text format. `prom-client` pulled in a second Drizzle copy through an `@opentelemetry/api` peer. `/metrics` is outside the API prefix and can be guarded by `METRICS_TOKEN`.
+- **Backups** (spec §63): a sidecar on the same Postgres major version runs `pg_dump -Fc` plus an uploads tarball, encrypted with AES-256 and PBKDF2. **Every backup is restored into a scratch database and checked**, because "a backup that has never been restored is not considered verified". Destructive restore requires `CONFIRM_RESTORE=yes`.
+- **Load test** (spec §68): the production build runs in its own process and autocannon runs in another. Fixed-rate "normal load" runs assert p95, with coordinated omission corrected; unthrottled runs record capacity. Results and method are in [PERFORMANCE.md](PERFORMANCE.md). Measuring found and fixed an analytics query that scaled with days × leads.
+- **Key rotation:** `rotateSecrets` re-encrypts every `*_enc` column (discovered from the catalog) and the sealed keys in inbox configuration in one transaction. It aborts with no changes if any value fails to open with the old key. Operators run it as `node dist/rotate-secrets.js` in the worker image. See [RUNBOOK.md](RUNBOOK.md).
+
+**Status (2026-10-10): done.** Verified: the backup ran and passed its restore test; a full restore drill into a scratch database and volume matched the source (§4.3 of the runbook); the load test passes every target; rotation is covered by integration tests (including no partial change on a wrong key) and was exercised through the CLI.
+
+Follow-ups noted, not done:
+- More than one API replica behind Caddy has not been tested (the API is stateless, but the proxy upstream needs configuring).
+- Prepared statements for the per-request auth queries and the lead read, if CPU per request becomes the limit (about 40% of API CPU at saturation is SQL building).
+- RPO is the backup interval. WAL archiving / point-in-time recovery would reduce it.
 
 ## Phase 7 — Integrations
 
