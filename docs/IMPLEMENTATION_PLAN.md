@@ -14,7 +14,7 @@ Follows spec §103–§114 and the sprint backlog in §148. Each phase is done o
 | 5 | Knowledge base / RAG with pgvector and citations | Done |
 | 6 | Automation engine | Done |
 | 7 | Integrations: WhatsApp, Facebook, Instagram, web chat, API keys | Done |
-| 8 | Analytics & forecasting | Not started |
+| 8 | Analytics & forecasting | Done |
 | 9 | Production hardening | Not started |
 | 10 | SaaS | Not started |
 

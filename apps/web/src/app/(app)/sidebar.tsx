@@ -23,7 +23,7 @@ const SECTIONS: { title?: string; items: NavItem[] }[] = [
       { label: 'Knowledge Base', href: '/knowledge', permission: 'knowledge.view' },
       { label: 'AI Assistant', href: '/assistant', permission: 'ai.use' },
       { label: 'Automations', href: '/automations', permission: 'automation.view' },
-      { label: 'Analytics', phase: 8 },
+      { label: 'Analytics', href: '/analytics', permission: 'analytics.view' },
     ],
   },
   {

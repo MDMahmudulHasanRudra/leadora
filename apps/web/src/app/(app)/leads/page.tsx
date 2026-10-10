@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { Card, formatDateTime, PageHeader } from '@/components/ui';
 import { getIdentity, requireData } from '@/lib/api-server';
 import { type Lead, type Page, type Pipeline, PRIORITIES, type UserRow } from '@/lib/types';
+import { ExportButton } from './export-button';
 import { PriorityBadge, ScoreBadge, StageBadge, titleCase } from './lead-bits';
 
 export const dynamic = 'force-dynamic';
@@ -43,6 +44,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
         description="Everyone who might buy from you, newest first."
         actions={
           <div className="flex gap-2">
+            {identity.permissions.includes('lead.export') && <ExportButton filters={Object.fromEntries(params)} />}
             {identity.permissions.includes('lead.import') && (
               <Link
                 href="/leads/import"
