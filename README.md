@@ -53,6 +53,11 @@ pnpm --filter @leadora/web dev      # http://localhost:3000
 
 Host-run apps read `DATABASE_URL` / `VALKEY_URL` from your shell environment; export them from `.env` first.
 
+Optional demo data: `pnpm db:seed` creates a separate "Demo Traders" organization with about forty leads, an admin
+(`SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`) and an optional agent (`SEED_AGENT_*`). It refuses to run with
+`NODE_ENV=production` and does nothing if the demo organization already exists. On a fresh install, finish `/setup`
+for your own organization first.
+
 ## Quality gates
 
 ```bash
@@ -60,6 +65,8 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
+pnpm licenses:check                    # production dependency licenses (ADR-009)
+pnpm --filter @leadora/api test:perf   # load test against spec §68 (docs/PERFORMANCE.md)
 ```
 
 ## Repository layout
@@ -71,7 +78,7 @@ apps/
   web/        Next.js frontend
 packages/
   config/     Zod-validated environment config
-  database/   Drizzle schema, migrations, seed
+  database/   Drizzle schema, migrations
 infrastructure/
   proxy/      Caddyfile
 docs/         Architecture, plan, ADRs

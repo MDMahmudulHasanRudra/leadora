@@ -32,7 +32,7 @@ Only `proxy` publishes a port. Postgres and Valkey are internal unless `docker-c
 ## Monorepo packages
 
 - `@leadora/config`: one Zod schema for all env vars. Services fail fast at boot with variable names only (never values).
-- `@leadora/database`: Drizzle schema (`src/schema`), generated SQL migrations (`migrations/`), `migrate` and `seed` entry points. Columns use `snake_case` in SQL and `camelCase` in TS.
+- `@leadora/database`: Drizzle schema (`src/schema`), generated SQL migrations (`migrations/`), the `migrate` entry point (demo data: `pnpm db:seed`, see `apps/api/src/seed-demo.ts`). Columns use `snake_case` in SQL and `camelCase` in TS.
 
 Packages compile to CommonJS `dist/`. Apps consume them through `workspace:*`. Run `pnpm build:packages` after changing a package.
 

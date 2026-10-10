@@ -8,7 +8,8 @@
     "start": "node dist/main.js",
     "dev": "tsx watch src/main.ts",
     "test": "vitest run",
-    "test:perf": "tsc -p tsconfig.json && vitest run --config vitest.perf.config.mts"
+    "test:perf": "tsc -p tsconfig.json && vitest run --config vitest.perf.config.mts",
+    "seed": "tsx src/seed-demo.ts"
   },
   "dependencies": {
     "@leadora/ai": "workspace:*",
