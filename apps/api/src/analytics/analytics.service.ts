@@ -67,12 +67,23 @@ export class AnalyticsService {
       select count(*) filter (where status = 'PENDING' and scheduled_at < now()) as overdue,
              count(*) filter (where status = 'PENDING' and scheduled_at >= now() and scheduled_at < now() + interval '1 day') as due_today
       from followups where organization_id = ${organizationId}`);
+    // One grouped pass per measure (a per-day subquery would scan the leads table twice for every day).
     const series = await this.exec<{ day: string; new_leads: number; conversions: number }>(sql`
-      with days as (select generate_series((now() at time zone 'utc')::date - ${days - 1}::int, (now() at time zone 'utc')::date, interval '1 day')::date as day)
-      select to_char(d.day, 'YYYY-MM-DD') as day,
-        (select count(*) from leads l where l.organization_id = ${organizationId} and l.archived_at is null and (l.created_at at time zone 'utc')::date = d.day) as new_leads,
-        (select count(*) from leads l where l.organization_id = ${organizationId} and l.archived_at is null and (l.converted_at at time zone 'utc')::date = d.day) as conversions
-      from days d order by d.day`);
+      with bounds as (select (now() at time zone 'utc')::date - ${days - 1}::int as first_day),
+      days as (select generate_series(b.first_day, (now() at time zone 'utc')::date, interval '1 day')::date as day from bounds b),
+      created as (
+        select (l.created_at at time zone 'utc')::date as day, count(*) as n from leads l, bounds b
+        where l.organization_id = ${organizationId} and l.archived_at is null and l.created_at >= b.first_day::timestamp at time zone 'utc'
+        group by 1
+      ),
+      converted as (
+        select (l.converted_at at time zone 'utc')::date as day, count(*) as n from leads l, bounds b
+        where l.organization_id = ${organizationId} and l.archived_at is null and l.converted_at >= b.first_day::timestamp at time zone 'utc'
+        group by 1
+      )
+      select to_char(d.day, 'YYYY-MM-DD') as day, coalesce(c.n, 0) as new_leads, coalesce(v.n, 0) as conversions
+      from days d left join created c on c.day = d.day left join converted v on v.day = d.day
+      order by d.day`);
     const newLeads = num(t?.new_leads);
     return {
       periodDays: days,

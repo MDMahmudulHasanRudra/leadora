@@ -7,7 +7,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "node dist/main.js",
     "dev": "tsx watch src/main.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:perf": "tsc -p tsconfig.json && vitest run --config vitest.perf.config.mts"
   },
   "dependencies": {
     "@leadora/ai": "workspace:*",
@@ -38,11 +39,13 @@
   "devDependencies": {
     "@nestjs/testing": "^12.1.2",
     "@swc/core": "^1.16.13",
+    "@types/autocannon": "^7.12.7",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.6",
     "@types/pg": "^8.23.1",
     "@types/supertest": "^7.2.1",
     "@types/ws": "^8.18.2",
+    "autocannon": "^8.0.0",
     "exceljs": "^4.4.0",
     "pg": "^8.23.1",
     "supertest": "^7.3.1",

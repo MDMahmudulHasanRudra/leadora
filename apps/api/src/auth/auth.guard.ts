@@ -27,13 +27,14 @@ export class AuthGuard implements CanActivate {
     if (bearer?.startsWith('Bearer ')) return this.viaApiKey(req, bearer.slice(7).trim(), required);
 
     const token: unknown = req.cookies?.[SESSION_COOKIE];
-    const unauthenticated = new UnauthorizedException({ code: 'UNAUTHENTICATED', message: 'Sign in required' });
-    if (typeof token !== 'string' || !token) throw unauthenticated;
+    // Built only when thrown: constructing an exception captures a stack trace, which is not free on every request.
+    const unauthenticated = () => new UnauthorizedException({ code: 'UNAUTHENTICATED', message: 'Sign in required' });
+    if (typeof token !== 'string' || !token) throw unauthenticated();
 
     const session = await this.sessions.findActive(token);
-    if (!session) throw unauthenticated;
+    if (!session) throw unauthenticated();
     const identity = await this.identity.load(session.userId, session.organizationId);
-    if (!identity || identity.user.status !== 'ACTIVE') throw unauthenticated;
+    if (!identity || identity.user.status !== 'ACTIVE') throw unauthenticated();
 
     req.auth = {
       userId: identity.user.id,
@@ -54,11 +55,11 @@ export class AuthGuard implements CanActivate {
    * (deny by default: no profile, notifications, sessions or settings through a key).
    */
   private async viaApiKey(req: Request & AuthedRequest, raw: string, required: Permission[]): Promise<boolean> {
-    const invalid = new UnauthorizedException({ code: 'INVALID_API_KEY', message: 'The API key is invalid, revoked or expired' });
+    const invalid = () => new UnauthorizedException({ code: 'INVALID_API_KEY', message: 'The API key is invalid, revoked or expired' });
     const key = await this.apiKeys.authenticate(raw);
-    if (!key) throw invalid;
+    if (!key) throw invalid();
     const identity = await this.identity.load(key.createdByUserId, key.organizationId);
-    if (!identity || identity.user.status !== 'ACTIVE') throw invalid;
+    if (!identity || identity.user.status !== 'ACTIVE') throw invalid();
     await this.apiKeys.assertWithinRate(key.keyId);
 
     const granted = scopePermissions(key.scopes);
