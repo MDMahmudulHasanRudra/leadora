@@ -1,7 +1,7 @@
 import { Global, Inject, Module, type OnApplicationShutdown } from '@nestjs/common';
 import type { Env } from '@leadora/config';
 import { Queue } from 'bullmq';
-import { AUTOMATIONS_QUEUE, DEFAULT_QUEUE, EMBEDDINGS_QUEUE, ENV, IMPORTS_QUEUE, MESSAGES_QUEUE, WEBHOOKS_QUEUE } from './tokens';
+import { AUTOMATIONS_QUEUE, DEFAULT_QUEUE, EMBEDDINGS_QUEUE, ENV, EXPORTS_QUEUE, IMPORTS_QUEUE, MESSAGES_QUEUE, WEBHOOKS_QUEUE } from './tokens';
 
 const queue = (token: symbol, name: string) => ({
   provide: token,
@@ -18,8 +18,9 @@ const queue = (token: symbol, name: string) => ({
     queue(EMBEDDINGS_QUEUE, 'embeddings'),
     queue(AUTOMATIONS_QUEUE, 'automations'),
     queue(WEBHOOKS_QUEUE, 'webhooks'),
+    queue(EXPORTS_QUEUE, 'exports'),
   ],
-  exports: [IMPORTS_QUEUE, MESSAGES_QUEUE, DEFAULT_QUEUE, EMBEDDINGS_QUEUE, AUTOMATIONS_QUEUE, WEBHOOKS_QUEUE],
+  exports: [IMPORTS_QUEUE, MESSAGES_QUEUE, DEFAULT_QUEUE, EMBEDDINGS_QUEUE, AUTOMATIONS_QUEUE, WEBHOOKS_QUEUE, EXPORTS_QUEUE],
 })
 export class QueuesModule implements OnApplicationShutdown {
   constructor(
@@ -29,9 +30,10 @@ export class QueuesModule implements OnApplicationShutdown {
     @Inject(EMBEDDINGS_QUEUE) private readonly embeddings: Queue,
     @Inject(AUTOMATIONS_QUEUE) private readonly automations: Queue,
     @Inject(WEBHOOKS_QUEUE) private readonly webhooks: Queue,
+    @Inject(EXPORTS_QUEUE) private readonly exportsQueue: Queue,
   ) {}
 
   async onApplicationShutdown() {
-    await Promise.allSettled([this.imports.close(), this.messages.close(), this.defaults.close(), this.embeddings.close(), this.automations.close(), this.webhooks.close()]);
+    await Promise.allSettled([this.imports.close(), this.messages.close(), this.defaults.close(), this.embeddings.close(), this.automations.close(), this.webhooks.close(), this.exportsQueue.close()]);
   }
 }

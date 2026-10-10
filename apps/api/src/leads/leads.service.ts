@@ -1,15 +1,15 @@
 import { ConflictException, ForbiddenException, Inject, Injectable, UnprocessableEntityException } from '@nestjs/common';
 import { activities, type DbHandle, leadSources, leads, leadTagLinks, leadTags, pipelineStages, type Transaction } from '@leadora/database';
-import { and, asc, eq, exists, ilike, isNotNull, isNull, lt, or, type SQL, sql } from 'drizzle-orm';
+import { and, asc, eq, lt, or, type SQL } from 'drizzle-orm';
 import type { AuthContext } from '../auth/auth-context';
 import { decodeTimeCursor, encodeTimeCursor } from '../common/cursor';
 import { DB } from '../infra/tokens';
 import { leadNotFound, LeadReader } from './lead-reader.service';
 import type { CreateLeadInput, ListLeadsQuery, UpdateLeadInput } from './leads.schemas';
 import {
-  escapeLike,
   findDuplicate,
   ingestLead,
+  leadFilters,
   loadCustomFieldDefinitions,
   normalizeEmail,
   readCustomFields,
@@ -36,31 +36,8 @@ export class LeadsService {
   ) {}
 
   async list(auth: AuthContext, q: ListLeadsQuery) {
-    const filters: SQL[] = [q.archived === 'true' ? isNotNull(leads.archivedAt) : isNull(leads.archivedAt)];
-    if (q.owner === 'me') filters.push(eq(leads.ownerUserId, auth.userId));
-    else if (q.owner === 'unassigned') filters.push(isNull(leads.ownerUserId));
-    else if (q.owner) filters.push(eq(leads.ownerUserId, q.owner));
-    if (q.stageId) filters.push(eq(leads.stageId, q.stageId));
-    if (q.sourceId) filters.push(eq(leads.sourceId, q.sourceId));
-    if (q.priority) filters.push(eq(leads.priority, q.priority));
-    if (q.temperature) filters.push(eq(leads.temperature, q.temperature));
-    if (q.tag) {
-      filters.push(
-        exists(
-          this.handle.db
-            .select({ one: sql`1` })
-            .from(leadTagLinks)
-            .innerJoin(leadTags, eq(leadTags.id, leadTagLinks.tagId))
-            .where(and(eq(leadTagLinks.leadId, leads.id), eq(leadTags.name, q.tag))),
-        ),
-      );
-    }
-    if (q.q) {
-      const pattern = `%${escapeLike(q.q)}%`;
-      filters.push(
-        or(ilike(leads.fullName, pattern), ilike(leads.email, pattern), ilike(leads.phone, pattern), ilike(leads.companyName, pattern))!,
-      );
-    }
+    // Shared with exports, so an export always contains exactly what the list shows.
+    const filters: SQL[] = leadFilters(q, auth.userId);
     if (q.cursor) {
       const c = decodeTimeCursor(q.cursor);
       filters.push(or(lt(leads.createdAt, c.createdAt), and(eq(leads.createdAt, c.createdAt), lt(leads.id, c.id)))!);

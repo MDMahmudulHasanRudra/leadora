@@ -20,10 +20,13 @@ import {
   processEmailStatusEvent,
   processLeadImport,
   processMetaEvent,
+  purgeExpiredExports,
   purgeProcessedEvents,
+  refreshAllInsights,
   REALTIME_CHANNEL,
   organizationsNeedingRescore,
   rescoreOrganization,
+  runLeadExport,
   sendFollowupReminders,
   stalePendingDeliveries,
   staleQueuedRuns,
@@ -59,6 +62,8 @@ const aiDeps = {
 const automationsQueue = new Queue('automations', { connection });
 const messagesQueue = new Queue('messages', { connection });
 const webhooksQueue = new Queue('webhooks', { connection });
+const exportsQueue = new Queue('exports', { connection });
+const analyticsQueue = new Queue('analytics', { connection });
 const enqueueDelivery = async (deliveryId: string) => {
   const job = webhookDeliveryJob(deliveryId);
   await webhooksQueue.add(job.name, job.data, job.opts);
@@ -132,6 +137,13 @@ const handlers: Partial<Record<QueueName, Record<string, (job: Job) => Promise<u
   webhooks: {
     'webhook.deliver': (job) => deliverWebhook(db, job.data.deliveryId, { encryptionKey: env.DATA_ENCRYPTION_KEY, finalAttempt: isFinal(job) }),
   },
+  analytics: {
+    'insights.refresh': async () => ({ organizations: await refreshAllInsights(db) }),
+  },
+  exports: {
+    'lead.export': (job) => runLeadExport(db, storage, job.data.exportId),
+    'exports.purge': async () => ({ purged: await purgeExpiredExports(db, storage) }),
+  },
   imports: {
     'lead.import': (job) =>
       handleLeadImport(
@@ -173,6 +185,8 @@ void Promise.all([
   automationsQueue.upsertJobScheduler('automations-sweep', { every: 60_000 }, { name: 'automations.sweep' }),
   automationsQueue.upsertJobScheduler('automations-inactive', { every: 3_600_000 }, { name: 'automations.inactive' }),
   automationsQueue.upsertJobScheduler('events-purge', { every: 86_400_000 }, { name: 'events.purge' }),
+  exportsQueue.upsertJobScheduler('exports-purge', { every: 3_600_000 }, { name: 'exports.purge' }),
+  analyticsQueue.upsertJobScheduler('insights-refresh', { every: 6 * 3_600_000 }, { name: 'insights.refresh' }),
 ]).catch((err: Error) => log.error({ err: err.message }, 'scheduler.failed'));
 
 // Leads that predate scoring (or a failed rescore) have no scored_at; queue their orgs once on boot.
@@ -208,7 +222,7 @@ async function shutdown(signal: string) {
   shuttingDown = true;
   log.info({ signal }, 'worker.stopping');
   server.close();
-  await Promise.allSettled([...workers.map((w) => w.close()), scheduler.close(), automationsQueue.close(), messagesQueue.close(), webhooksQueue.close()]);
+  await Promise.allSettled([...workers.map((w) => w.close()), scheduler.close(), automationsQueue.close(), messagesQueue.close(), webhooksQueue.close(), exportsQueue.close(), analyticsQueue.close()]);
   await pool.end();
   email?.close();
   publisher.disconnect();

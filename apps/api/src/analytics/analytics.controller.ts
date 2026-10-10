@@ -1,4 +1,4 @@
-import { Controller, Get, Inject, Query } from '@nestjs/common';
+import { Controller, Get, HttpCode, Inject, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { type DbHandle, followups, leadSources, leads, pipelineStages, pipelines, users } from '@leadora/database';
 import { and, asc, eq, isNull, type SQL, sql } from 'drizzle-orm';
@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { type AuthContext, CurrentAuth, RequirePermission } from '../auth/auth-context';
 import { ZodPipe } from '../common/zod.pipe';
 import { DB } from '../infra/tokens';
+import { AnalyticsService } from './analytics.service';
 
 const querySchema = z.object({ days: z.coerce.number().int().min(1).max(365).default(30) });
 type DashboardQuery = z.infer<typeof querySchema>;
@@ -20,7 +21,47 @@ const countWhere = (cond: SQL) => sql<number>`count(*) filter (where ${cond})`;
 @ApiTags('analytics')
 @Controller('analytics')
 export class AnalyticsController {
-  constructor(@Inject(DB) private readonly handle: DbHandle) {}
+  constructor(
+    @Inject(DB) private readonly handle: DbHandle,
+    private readonly analytics: AnalyticsService,
+  ) {}
+
+  @Get('overview')
+  @RequirePermission('analytics.view')
+  overview(@CurrentAuth() auth: AuthContext, @Query(new ZodPipe(querySchema)) q: DashboardQuery) {
+    return this.analytics.overview(auth.organizationId, q.days);
+  }
+
+  @Get('sources')
+  @RequirePermission('analytics.view')
+  sources(@CurrentAuth() auth: AuthContext, @Query(new ZodPipe(querySchema)) q: DashboardQuery) {
+    return this.analytics.sources(auth.organizationId, q.days);
+  }
+
+  @Get('team')
+  @RequirePermission('analytics.view')
+  team(@CurrentAuth() auth: AuthContext, @Query(new ZodPipe(querySchema)) q: DashboardQuery) {
+    return this.analytics.team(auth.organizationId, q.days);
+  }
+
+  @Get('insights')
+  @RequirePermission('analytics.view')
+  insights(@CurrentAuth() auth: AuthContext) {
+    return this.analytics.insights(auth.organizationId);
+  }
+
+  @Post('insights/refresh')
+  @HttpCode(200)
+  @RequirePermission('analytics.view')
+  refreshInsights(@CurrentAuth() auth: AuthContext) {
+    return this.analytics.refreshInsights(auth.organizationId);
+  }
+
+  @Get('forecast')
+  @RequirePermission('analytics.view')
+  forecast(@CurrentAuth() auth: AuthContext) {
+    return this.analytics.forecast(auth.organizationId);
+  }
 
   @Get('dashboard')
   @RequirePermission('lead.view')

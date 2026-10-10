@@ -22,3 +22,5 @@ export * from './automation';
 export * from './api-keys';
 export * from './webhooks';
 export * from './lead-forms';
+export * from './exports';
+export * from './insights';

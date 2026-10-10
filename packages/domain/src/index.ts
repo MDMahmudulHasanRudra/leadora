@@ -31,3 +31,6 @@ export * from './integrations/webhooks';
 export * from './communication/receive';
 export * from './integrations/meta';
 export * from './communication/email-status';
+export * from './leads/filters';
+export * from './exports/lead-export';
+export * from './analytics/insights';

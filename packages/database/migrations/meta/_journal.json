@@ -169,6 +169,20 @@
       "when": 1791467021548,
       "tag": "0023_lead_forms",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1791629950477,
+      "tag": "0024_data_exports",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1791630401087,
+      "tag": "0025_sales_insights",
+      "breakpoints": true
     }
   ]
 }

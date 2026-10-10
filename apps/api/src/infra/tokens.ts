@@ -13,3 +13,4 @@ export const AUTOMATIONS_QUEUE = Symbol('AUTOMATIONS_QUEUE');
 export const WEBHOOKS_QUEUE = Symbol('WEBHOOKS_QUEUE');
 /** (provider, secret, token, ip) => Promise<boolean>. Overridden in tests. */
 export const CAPTCHA_VERIFIER = Symbol('CAPTCHA_VERIFIER');
+export const EXPORTS_QUEUE = Symbol('EXPORTS_QUEUE');
