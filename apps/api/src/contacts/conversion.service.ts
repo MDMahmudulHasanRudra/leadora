@@ -2,6 +2,7 @@ import { ConflictException, Inject, Injectable, UnprocessableEntityException } f
 import { activities, companies, contacts, type DbHandle, leads, pipelineStages, type Transaction } from '@leadora/database';
 import { and, asc, eq, or, sql, type SQL } from 'drizzle-orm';
 import type { AuthContext } from '../auth/auth-context';
+import { leadVisibility } from '@leadora/domain';
 import { leadNotFound } from '../leads/lead-reader.service';
 import { DB } from '../infra/tokens';
 
@@ -20,7 +21,7 @@ export class ConversionService {
       const [lead] = await tx
         .select()
         .from(leads)
-        .where(and(eq(leads.id, leadId), eq(leads.organizationId, auth.organizationId)))
+        .where(and(eq(leads.id, leadId), eq(leads.organizationId, auth.organizationId), leadVisibility(auth)))
         .for('update');
       if (!lead) throw leadNotFound();
       if (lead.archivedAt) throw new ConflictException({ code: 'LEAD_ARCHIVED', message: 'Restore this lead first' });

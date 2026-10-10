@@ -21,6 +21,8 @@ import { z } from 'zod';
 import { type AuthContext, CurrentAuth, RequirePermission } from '../auth/auth-context';
 import { ZodPipe } from '../common/zod.pipe';
 import { DB } from '../infra/tokens';
+import type { Viewer } from '../leads/lead-reader.service';
+import { leadVisibility } from '@leadora/domain';
 
 const priority = z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']);
 const dueAt = z.iso.datetime({ offset: true }).transform((s) => new Date(s)).nullable();
@@ -67,7 +69,9 @@ const assignee = aliasedTable(users, 'assignee');
 export class TasksController {
   constructor(@Inject(DB) private readonly handle: DbHandle) {}
 
-  private async find(db: DbHandle['db'] | Transaction, organizationId: string, where?: SQL, order: SQL[] = []) {
+  /** Tasks stay visible to their viewers; the linked lead is shown only when the viewer may see it. */
+  private async find(db: DbHandle['db'] | Transaction, viewer: Viewer, where?: SQL, order: SQL[] = []) {
+    const { organizationId } = viewer;
     const rows = await db
       .select({
         id: tasks.id,
@@ -85,7 +89,7 @@ export class TasksController {
         assigneeName: assignee.fullName,
       })
       .from(tasks)
-      .leftJoin(leads, eq(leads.id, tasks.leadId))
+      .leftJoin(leads, and(eq(leads.id, tasks.leadId), leadVisibility(viewer)))
       .leftJoin(assignee, eq(assignee.id, tasks.assignedUserId))
       .where(and(eq(tasks.organizationId, organizationId), where))
       .orderBy(...order)
@@ -97,8 +101,8 @@ export class TasksController {
     }));
   }
 
-  private async get(db: DbHandle['db'] | Transaction, organizationId: string, id: string) {
-    const [task] = await this.find(db, organizationId, eq(tasks.id, id));
+  private async get(db: DbHandle['db'] | Transaction, viewer: Viewer, id: string) {
+    const [task] = await this.find(db, viewer, eq(tasks.id, id));
     if (!task) throw notFound();
     return task;
   }
@@ -122,7 +126,7 @@ export class TasksController {
     if (q.leadId) filters.push(eq(tasks.leadId, q.leadId));
     if (q.status !== 'all') filters.push(eq(tasks.status, q.status === 'open' ? 'OPEN' : 'DONE'));
     const order = q.status === 'done' ? [desc(tasks.completedAt)] : [asc(tasks.dueAt), asc(tasks.createdAt)];
-    return { items: await this.find(this.handle.db, auth.organizationId, and(...filters), order) };
+    return { items: await this.find(this.handle.db, auth, and(...filters), order) };
   }
 
   @Post()
@@ -136,7 +140,7 @@ export class TasksController {
         const [lead] = await tx
           .select({ id: leads.id })
           .from(leads)
-          .where(and(eq(leads.id, body.leadId), eq(leads.organizationId, auth.organizationId)));
+          .where(and(eq(leads.id, body.leadId), eq(leads.organizationId, auth.organizationId), leadVisibility(auth)));
         if (!lead) throw new UnprocessableEntityException({ code: 'INVALID_LEAD', message: 'Lead not found' });
       }
       const [row] = await tx
@@ -153,7 +157,7 @@ export class TasksController {
           checklist: (body.checklist ?? []).map((text) => ({ text, done: false })),
         })
         .returning({ id: tasks.id });
-      return this.get(tx, auth.organizationId, row!.id);
+      return this.get(tx, auth, row!.id);
     });
   }
 
@@ -174,7 +178,7 @@ export class TasksController {
         .update(tasks)
         .set({ ...body, ...statusChange, ...(body.description !== undefined ? { description: body.description || null } : {}) })
         .where(eq(tasks.id, id));
-      return this.get(tx, auth.organizationId, id);
+      return this.get(tx, auth, id);
     });
   }
 

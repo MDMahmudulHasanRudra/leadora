@@ -4,12 +4,13 @@ import { and, asc, eq, lt, or, type SQL } from 'drizzle-orm';
 import type { AuthContext } from '../auth/auth-context';
 import { decodeTimeCursor, encodeTimeCursor } from '../common/cursor';
 import { DB } from '../infra/tokens';
-import { leadNotFound, LeadReader } from './lead-reader.service';
+import { leadNotFound, LeadReader, type Viewer } from './lead-reader.service';
 import type { CreateLeadInput, ListLeadsQuery, UpdateLeadInput } from './leads.schemas';
 import {
   findDuplicate,
   ingestLead,
   leadFilters,
+  leadVisibility,
   loadCustomFieldDefinitions,
   normalizeEmail,
   readCustomFields,
@@ -28,6 +29,12 @@ import {
 
 const TEXT_FIELDS = ['fullName', 'companyName', 'jobTitle', 'location', 'country', 'industry', 'currency', 'notes'] as const;
 
+/**
+ * Reads back the lead a caller has just written. Access was checked before the write, and the write may have
+ * moved the lead out of their view (an assignment rule giving it to someone else), which must not undo it.
+ */
+const readBack = (auth: AuthContext): Viewer => ({ ...auth, permissions: new Set([...auth.permissions, 'lead.view_all']) });
+
 @Injectable()
 export class LeadsService {
   constructor(
@@ -43,17 +50,18 @@ export class LeadsService {
       filters.push(or(lt(leads.createdAt, c.createdAt), and(eq(leads.createdAt, c.createdAt), lt(leads.id, c.id)))!);
     }
 
-    const rows = await this.reader.find(auth.organizationId, { where: and(...filters), limit: q.limit + 1 });
+    const rows = await this.reader.find(auth, { where: and(...filters), limit: q.limit + 1 });
     const items = rows.slice(0, q.limit);
     const last = items.at(-1);
     return { items, nextCursor: rows.length > q.limit && last ? encodeTimeCursor(last.createdAt, last.id) : null };
   }
 
-  private async lockLead(tx: Transaction, organizationId: string, id: string) {
+  /** Locks a lead the caller may see; anything else is LEAD_NOT_FOUND, as if it did not exist. */
+  private async lockLead(tx: Transaction, auth: AuthContext, id: string) {
     const [lead] = await tx
       .select()
       .from(leads)
-      .where(and(eq(leads.id, id), eq(leads.organizationId, organizationId)))
+      .where(and(eq(leads.id, id), eq(leads.organizationId, auth.organizationId), leadVisibility(auth)))
       .for('update');
     if (!lead) throw leadNotFound();
     return lead;
@@ -61,7 +69,7 @@ export class LeadsService {
 
   async update(auth: AuthContext, id: string, input: UpdateLeadInput) {
     return this.handle.db.transaction(async (tx) => {
-      const current = await this.lockLead(tx, auth.organizationId, id);
+      const current = await this.lockLead(tx, auth, id);
       if (current.archivedAt) {
         throw new ConflictException({ code: 'LEAD_ARCHIVED', message: 'Restore this lead before editing it' });
       }
@@ -162,14 +170,14 @@ export class LeadsService {
       if (stageChange) {
         await emitEvent(tx, { organizationId: auth.organizationId, type: 'lead.stage_changed', leadId: id, actorUserId: auth.userId, payload: stageChange });
       }
-      return this.reader.get(auth.organizationId, id, tx);
+      return this.reader.get(readBack(auth), id, tx);
     });
   }
 
   /** Re-runs assignment rules for an existing lead (spec §17). */
   async autoAssign(auth: AuthContext, id: string) {
     return this.handle.db.transaction(async (tx) => {
-      const current = await this.lockLead(tx, auth.organizationId, id);
+      const current = await this.lockLead(tx, auth, id);
       if (current.archivedAt) throw new ConflictException({ code: 'LEAD_ARCHIVED', message: 'Restore this lead first' });
       const [source] = await tx.select({ type: leadSources.type }).from(leadSources).where(eq(leadSources.id, current.sourceId));
       const pick = await pickOwnerByRules(tx, auth.organizationId, {
@@ -197,14 +205,14 @@ export class LeadsService {
           payload: { from: current.ownerUserId, to: pick.userId, assignmentRule: pick.ruleName },
         });
       }
-      return this.reader.get(auth.organizationId, id, tx);
+      return this.reader.get(readBack(auth), id, tx);
     });
   }
 
   /** Notes are immutable timeline entries (spec §20): corrections are new notes. */
   async addNote(auth: AuthContext, id: string, body: string) {
     return this.handle.db.transaction(async (tx) => {
-      const current = await this.lockLead(tx, auth.organizationId, id);
+      const current = await this.lockLead(tx, auth, id);
       if (current.archivedAt) {
         throw new ConflictException({ code: 'LEAD_ARCHIVED', message: 'Restore this lead before adding notes' });
       }
@@ -219,7 +227,7 @@ export class LeadsService {
 
   async setArchived(auth: AuthContext, id: string, archived: boolean) {
     return this.handle.db.transaction(async (tx) => {
-      const current = await this.lockLead(tx, auth.organizationId, id);
+      const current = await this.lockLead(tx, auth, id);
       if (Boolean(current.archivedAt) !== archived) {
         await tx.update(leads).set({ archivedAt: archived ? new Date() : null }).where(eq(leads.id, id));
         await tx.insert(activities).values({
@@ -229,7 +237,7 @@ export class LeadsService {
           type: archived ? 'lead.archived' : 'lead.restored',
         });
       }
-      return this.reader.get(auth.organizationId, id, tx);
+      return this.reader.get(readBack(auth), id, tx);
     });
   }
 
@@ -260,7 +268,7 @@ export class LeadsService {
           details: { existingLeadId: result.existingLeadId, matchedOn: result.matchedOn },
         });
       }
-      return this.reader.get(auth.organizationId, result.leadId, tx);
+      return this.reader.get(readBack(auth), result.leadId, tx);
     });
   }
 }

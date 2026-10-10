@@ -83,7 +83,7 @@ export async function searchLeads(db: Db, reader: LeadReader, auth: AuthContext,
         ? [sql`${leads.lastContactedAt} asc nulls first`]
         : [sql`${leads.score} desc nulls last`, desc(leads.createdAt)];
 
-  const rows = await reader.find(auth.organizationId, { where: and(...where), orderBy, limit: LIMIT });
+  const rows = await reader.find(auth, { where: and(...where), orderBy, limit: LIMIT });
   return {
     kind: 'leads',
     items: rows.map((l) => ({

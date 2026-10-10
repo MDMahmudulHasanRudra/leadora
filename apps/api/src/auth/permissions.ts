@@ -8,6 +8,8 @@ export const PERMISSIONS = [
   'team.view',
   'team.manage',
   'lead.view',
+  // Without it, lead.view covers only the viewer's own and unassigned leads.
+  'lead.view_all',
   'lead.create',
   'lead.update',
   'lead.delete',
@@ -46,6 +48,7 @@ export const DEFAULT_ROLES: Record<RoleKey, { name: string; permissions: readonl
     name: 'Manager',
     permissions: [
       ...READ_ONLY,
+      'lead.view_all',
       'team.manage',
       'lead.create',
       'lead.update',
@@ -77,8 +80,8 @@ export const DEFAULT_ROLES: Record<RoleKey, { name: string; permissions: readonl
       'ai.use',
     ],
   },
-  ANALYST: { name: 'Analyst', permissions: [...READ_ONLY, 'analytics.view', 'analytics.export'] },
-  VIEWER: { name: 'Viewer', permissions: [...READ_ONLY, 'analytics.view'] },
+  ANALYST: { name: 'Analyst', permissions: [...READ_ONLY, 'lead.view_all', 'analytics.view', 'analytics.export'] },
+  VIEWER: { name: 'Viewer', permissions: [...READ_ONLY, 'lead.view_all', 'analytics.view'] },
 };
 
 export const ROLE_KEYS = Object.keys(DEFAULT_ROLES) as RoleKey[];

@@ -82,7 +82,7 @@ Follow-ups noted, not done:
 - **Dedup** for now matches exact normalized email and exact normalized phone within the organization. A duplicate is never silently dropped: manual create returns 409 with the existing lead id. Fuzzy matching and merge come later.
 - **Phones** are normalized to E.164 with `libphonenumber-js`, using the organization's default country (`BD` unless changed).
 - **Ownership:** a new lead is owned by its creator unless `ownerUserId` is given. Giving the lead to someone else needs `lead.assign`.
-- **Visibility:** anyone with `lead.view` sees all of the organization's leads; "My leads" is a filter. Row-level visibility (agents see only their own) is a product decision to confirm before Phase 2.
+- **Visibility** (decided 2026-10-10): `lead.view` alone covers the viewer's **own and unassigned** leads; `lead.view_all` (Admin, Manager, Analyst, Viewer; not Agent) covers every lead. Migration 0026 grants it to existing roles. One `leadVisibility(viewer)` condition is applied in `LeadReader` (list, detail, board, AI analysis, assistant search), in every lead mutation's row lock, and for follow-ups, conversion, task links and exports (recorded as `visibleTo` with the job, never taken from input). An invisible lead behaves as nonexistent (404, or 422 where the route already reports unknown leads that way). Reading a lead back right after a write uses the caller's pre-checked access, so an assignment rule that hands an agent's new lead to someone else does not undo the create. Conversations are still scoped by `conversation.view` (a shared inbox), so an agent can see a conversation linked to another agent's lead. Per-agent inbox visibility is a separate decision.
 - **Delete = archive** (`archived_at`). Leads are never hard-deleted from the API (spec §9, §13).
 - **Company** stays free text on the lead (`company_name`) until lead conversion creates Company and Contact records in Sprint 4.
 
@@ -92,6 +92,7 @@ Follow-ups noted, not done:
 | --- | --- | --- | --- |
 | Elevation | Agent assigns leads to others | `lead.assign` required for any owner other than self | agent → 403 |
 | Info disclosure | Reading or editing another org's lead, stage, tag or owner by id | every lookup scoped by `organization_id`; owner, stage and source ids validated in the same org | cross-org → 404 / 422 |
+| Info disclosure | Agent reads, edits, schedules on, converts, links or exports a colleague's lead | `leadVisibility` in the reader, row locks, follow-ups, tasks and exports; export visibility set server-side | `lead-visibility.spec.ts` (each route, plus mutation checks) |
 | Tampering | Moving a lead to a stage of another pipeline | stage must belong to the lead's pipeline | 422 |
 | DoS | Huge search strings or page sizes | `q` ≤ 100 chars, `limit` ≤ 100 | 422 |
 | Injection | Search text with SQL wildcards or quotes | parameterized `ILIKE` with `%`/`_` escaped | search for `%` matches literally |

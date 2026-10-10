@@ -10,11 +10,14 @@ import {
   type Transaction,
   users,
 } from '@leadora/database';
-import { readCustomFields } from '@leadora/domain';
+import { leadVisibility, readCustomFields } from '@leadora/domain';
 import { and, asc, desc, eq, inArray, type SQL } from 'drizzle-orm';
+import type { AuthContext } from '../auth/auth-context';
 import { DB } from '../infra/tokens';
 
 type Db = DbHandle['db'] | Transaction;
+/** Who is reading: leads are scoped to their organization and to what they may see (lead.view_all). */
+export type Viewer = Pick<AuthContext, 'organizationId' | 'userId' | 'permissions'>;
 
 export const leadNotFound = () => new NotFoundException({ code: 'LEAD_NOT_FOUND', message: 'Lead not found' });
 
@@ -22,10 +25,11 @@ export const leadNotFound = () => new NotFoundException({ code: 'LEAD_NOT_FOUND'
 export class LeadReader {
   constructor(@Inject(DB) private readonly handle: DbHandle) {}
 
-  /** Lead rows shaped for the API, tenant-scoped, with source, stage, owner and tags. */
-  async find(organizationId: string, opts: { where?: SQL; orderBy?: SQL[]; limit?: number; db?: Db } = {}) {
+  /** Lead rows shaped for the API, scoped to the viewer's organization and visibility, with source, stage, owner and tags. */
+  async find(viewer: Viewer, opts: { where?: SQL; orderBy?: SQL[]; limit?: number; db?: Db } = {}) {
     const db = opts.db ?? this.handle.db;
-    const scope = eq(leads.organizationId, organizationId);
+    const { organizationId } = viewer;
+    const scope = and(eq(leads.organizationId, organizationId), leadVisibility(viewer))!;
     const rows = await db
       .select({
         id: leads.id,
@@ -123,14 +127,24 @@ export class LeadReader {
     }));
   }
 
-  async get(organizationId: string, id: string, db?: Db) {
-    const [lead] = await this.find(organizationId, { where: eq(leads.id, id), limit: 1, db });
+  async get(viewer: Viewer, id: string, db?: Db) {
+    const [lead] = await this.find(viewer, { where: eq(leads.id, id), limit: 1, db });
     if (!lead) throw leadNotFound();
     return lead;
   }
 
-  async activities(organizationId: string, leadId: string) {
-    await this.get(organizationId, leadId);
+  /** Throws LEAD_NOT_FOUND unless the lead exists in the viewer's organization and they may see it. */
+  async assertVisible(viewer: Viewer, id: string, db?: Db) {
+    const [row] = await (db ?? this.handle.db)
+      .select({ id: leads.id })
+      .from(leads)
+      .where(and(eq(leads.id, id), eq(leads.organizationId, viewer.organizationId), leadVisibility(viewer)));
+    if (!row) throw leadNotFound();
+  }
+
+  async activities(viewer: Viewer, leadId: string) {
+    const { organizationId } = viewer;
+    await this.assertVisible(viewer, leadId);
     const rows = await this.handle.db
       .select({
         id: activities.id,

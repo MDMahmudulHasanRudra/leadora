@@ -59,7 +59,7 @@ export class BoardController {
       stages.map(async (stage) => ({
         ...stage,
         count: Number(counts.find((c) => c.stageId === stage.id)?.n ?? 0),
-        leads: await this.reader.find(auth.organizationId, { where: and(eq(leads.stageId, stage.id), ...filters), limit: q.perStage }),
+        leads: await this.reader.find(auth, { where: and(eq(leads.stageId, stage.id), ...filters), limit: q.perStage }),
       })),
     );
     return { pipeline, stages: columns };

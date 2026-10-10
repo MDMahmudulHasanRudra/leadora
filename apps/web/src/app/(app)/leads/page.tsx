@@ -26,7 +26,9 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
     if (typeof v === 'string' && v) params.set(key, v);
   }
 
-  const canSeeUsers = identity.permissions.includes('user.view');
+  // Without lead.view_all the API returns only your own and unassigned leads, so other owners are not offered.
+  const seesAll = identity.permissions.includes('lead.view_all');
+  const canSeeUsers = seesAll && identity.permissions.includes('user.view');
   const [leads, pipelines, users] = await Promise.all([
     requireData<Page<Lead>>(`/leads?limit=25&${params}`),
     requireData<Page<Pipeline>>('/pipelines'),
@@ -41,7 +43,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
     <>
       <PageHeader
         title={params.get('archived') === 'true' ? 'Archived leads' : 'Leads'}
-        description="Everyone who might buy from you, newest first."
+        description={seesAll ? 'Everyone who might buy from you, newest first.' : 'Your leads and unassigned leads, newest first.'}
         actions={
           <div className="flex gap-2">
             {identity.permissions.includes('lead.export') && <ExportButton filters={Object.fromEntries(params)} />}

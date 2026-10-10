@@ -183,6 +183,13 @@
       "when": 1791630401087,
       "tag": "0025_sales_insights",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1791637720185,
+      "tag": "0026_lead_view_all",
+      "breakpoints": true
     }
   ]
 }

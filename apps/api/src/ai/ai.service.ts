@@ -112,7 +112,7 @@ export class AiService {
     return analyzeLeadWithAi(this.handle.db, this.deps(), { organizationId: auth.organizationId, userId: auth.userId }, leadId);
   }
   async latestAnalysis(auth: AuthContext, leadId: string) {
-    await this.reader.get(auth.organizationId, leadId);
+    await this.reader.get(auth, leadId);
     const [row] = await this.handle.db
       .select({ result: aiAnalyses.result, createdAt: aiAnalyses.createdAt })
       .from(aiAnalyses)

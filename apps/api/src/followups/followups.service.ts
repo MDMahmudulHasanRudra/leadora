@@ -7,11 +7,11 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { activities, type DbHandle, followups, leads, type Transaction, users } from '@leadora/database';
-import { rescoreLeads } from '@leadora/domain';
+import { leadVisibility, rescoreLeads } from '@leadora/domain';
 import { aliasedTable, and, asc, desc, eq, gte, inArray, lt, min, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import type { AuthContext } from '../auth/auth-context';
-import { leadNotFound } from '../leads/lead-reader.service';
+import { leadNotFound, type Viewer } from '../leads/lead-reader.service';
 import { DB } from '../infra/tokens';
 
 const TYPES = ['CALL', 'EMAIL', 'MESSAGE', 'MEETING', 'CUSTOM'] as const;
@@ -53,7 +53,8 @@ const assignee = aliasedTable(users, 'assignee');
 export class FollowupsService {
   constructor(@Inject(DB) private readonly handle: DbHandle) {}
 
-  private async find(db: DbHandle['db'] | Transaction, organizationId: string, where: SQL, order: SQL[], limit = 100) {
+  /** Follow-ups are visible when their lead is (agents: own and unassigned leads). */
+  private async find(db: DbHandle['db'] | Transaction, viewer: Viewer, where: SQL, order: SQL[], limit = 100) {
     const rows = await db
       .select({
         id: followups.id,
@@ -73,7 +74,7 @@ export class FollowupsService {
       .from(followups)
       .innerJoin(leads, eq(leads.id, followups.leadId))
       .leftJoin(assignee, eq(assignee.id, followups.assignedUserId))
-      .where(and(eq(followups.organizationId, organizationId), where))
+      .where(and(eq(followups.organizationId, viewer.organizationId), leadVisibility(viewer), where))
       .orderBy(...order)
       .limit(limit);
     const now = Date.now();
@@ -85,8 +86,8 @@ export class FollowupsService {
     }));
   }
 
-  private async get(db: DbHandle['db'] | Transaction, organizationId: string, id: string) {
-    const [row] = await this.find(db, organizationId, eq(followups.id, id), []);
+  private async get(db: DbHandle['db'] | Transaction, viewer: Viewer, id: string) {
+    const [row] = await this.find(db, viewer, eq(followups.id, id), []);
     if (!row) throw notFound();
     return row;
   }
@@ -101,7 +102,7 @@ export class FollowupsService {
     if (q.status === 'upcoming') filters.push(eq(followups.status, 'PENDING'), gte(followups.scheduledAt, now));
     if (q.status === 'completed') filters.push(inArray(followups.status, ['COMPLETED', 'SKIPPED', 'CANCELLED']));
     const order = q.status === 'completed' ? [desc(followups.completedAt)] : [asc(followups.scheduledAt)];
-    return this.find(this.handle.db, auth.organizationId, and(...filters) ?? eq(followups.organizationId, auth.organizationId), order, q.limit);
+    return this.find(this.handle.db, auth, and(...filters) ?? eq(followups.organizationId, auth.organizationId), order, q.limit);
   }
 
   /** Keeps leads.next_followup_at equal to the earliest pending follow-up (spec §8). */
@@ -121,7 +122,7 @@ export class FollowupsService {
       const [lead] = await tx
         .select({ id: leads.id, ownerUserId: leads.ownerUserId, archivedAt: leads.archivedAt })
         .from(leads)
-        .where(and(eq(leads.id, leadId), eq(leads.organizationId, auth.organizationId)))
+        .where(and(eq(leads.id, leadId), eq(leads.organizationId, auth.organizationId), leadVisibility(auth)))
         .for('update');
       if (!lead) throw leadNotFound();
       if (lead.archivedAt) throw new ConflictException({ code: 'LEAD_ARCHIVED', message: 'Restore this lead first' });
@@ -157,7 +158,7 @@ export class FollowupsService {
         payload: { followupId: row!.id, type: input.type, scheduledAt: input.scheduledAt.toISOString(), assignedUserId: target },
       });
       await this.syncLead(tx, leadId, false);
-      return this.get(tx, auth.organizationId, row!.id);
+      return this.get(tx, auth, row!.id);
     });
   }
 
@@ -166,7 +167,13 @@ export class FollowupsService {
       const [current] = await tx
         .select()
         .from(followups)
-        .where(and(eq(followups.id, id), eq(followups.organizationId, auth.organizationId)))
+        .where(
+          and(
+            eq(followups.id, id),
+            eq(followups.organizationId, auth.organizationId),
+            inArray(followups.leadId, tx.select({ id: leads.id }).from(leads).where(and(eq(leads.organizationId, auth.organizationId), leadVisibility(auth)))),
+          ),
+        )
         .for('update');
       if (!current) throw notFound();
       if (current.status !== 'PENDING') {
@@ -207,7 +214,7 @@ export class FollowupsService {
       });
       await this.syncLead(tx, current.leadId, input.status === 'COMPLETED' && CONTACT_TYPES.has(input.type ?? current.type));
       if (input.status === 'COMPLETED') await rescoreLeads(tx, auth.organizationId, [current.leadId]);
-      return this.get(tx, auth.organizationId, id);
+      return this.get(tx, auth, id);
     });
   }
 }

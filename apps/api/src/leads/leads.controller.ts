@@ -41,7 +41,7 @@ export class LeadsController {
   @Get(':id')
   @RequirePermission('lead.view')
   get(@CurrentAuth() auth: AuthContext, @Param('id', Id) id: string) {
-    return this.reader.get(auth.organizationId, id);
+    return this.reader.get(auth, id);
   }
 
   @Patch(':id')
@@ -81,6 +81,6 @@ export class LeadsController {
   @Get(':id/activities')
   @RequirePermission('lead.view')
   async activities(@CurrentAuth() auth: AuthContext, @Param('id', Id) id: string) {
-    return { items: await this.reader.activities(auth.organizationId, id) };
+    return { items: await this.reader.activities(auth, id) };
   }
 }

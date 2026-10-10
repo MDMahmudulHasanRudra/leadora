@@ -1,6 +1,6 @@
 import { ConflictException, Inject, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { customFieldDefinitions, dataExports, type DbHandle } from '@leadora/database';
-import { LEAD_EXPORT_FIELDS } from '@leadora/domain';
+import { LEAD_EXPORT_FIELDS, visibilityFilter } from '@leadora/domain';
 import type { StorageProvider } from '@leadora/storage';
 import type { Queue } from 'bullmq';
 import { and, desc, eq } from 'drizzle-orm';
@@ -54,7 +54,7 @@ export class ExportsService {
     const job = await this.handle.db.transaction(async (tx) => {
       const [row] = await tx
         .insert(dataExports)
-        .values({ organizationId: auth.organizationId, userId: auth.userId, entity: input.entity, format: input.format, fields: [...new Set(input.fields)], filters: input.filters })
+        .values({ organizationId: auth.organizationId, userId: auth.userId, entity: input.entity, format: input.format, fields: [...new Set(input.fields)], filters: { ...input.filters, ...visibilityFilter(auth) } })
         .returning();
       // Spec §49: exporting customer data is an auditable event.
       await this.audit.record(tx, {
